@@ -1,4 +1,4 @@
-#include "GeoComp.hpp"
+#include "GeoMesh.hpp"
 #include <unistd.h>
 using namespace std;
 

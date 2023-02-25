@@ -1,4 +1,4 @@
-#include "GeoComp.hpp"
+#include "GeoMesh.hpp"
 #include <Eigen/Sparse>
 #include <queue>
 using namespace std;

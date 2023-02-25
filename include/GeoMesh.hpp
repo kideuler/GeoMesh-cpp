@@ -1,10 +1,11 @@
-#include <linalg.hpp>
+#include "Matrix.hpp"
 #include <fstream>
 #include <sstream>
 #include <string>
 #include <algorithm>
 #include <iostream>
 #include <functional>
+using namespace std;
 
 struct Mesh {
     vector<vector<double>> coords;
@@ -20,6 +21,10 @@ struct Mesh {
     vector<bool> bwork;
     vector<bool> on_boundary;
     void compute_AHF();
+    void Delaunay_refine(function<double(vector<double>)> r_ref, Spline* spl);
+    void Delaunay_refine(double r_ref, Spline* spl);
+    void Delaunay_refine(function<double(vector<double>)> r_ref);
+    void Delaunay_refine(double r_ref);
 };
 
 struct Spline {
@@ -47,13 +52,13 @@ vector<double> spline_point_segment(Spline* spl, double a, double b, double rati
 void mesh_smoothing_2d(Mesh* mesh, vector<bool> no_move, function<double(vector<double>)> r_ref, double mu);
 
 // mesh refinement functions
-void GeoComp_refine(Mesh* DT, function<double(vector<double>)> r_ref, Spline* spl);
-void GeoComp_refine(Mesh* DT, double r_ref, Spline* spl);
+void GeoMesh_refine(Mesh* DT, function<double(vector<double>)> r_ref, Spline* spl);
+void GeoMesh_refine(Mesh* DT, double r_ref, Spline* spl);
 
 // delaunay Mesh functions 2d
-Mesh GeoComp_Delaunay_Mesh(vector<vector<double>> &xs, vector<double> &params);
-Mesh GeoComp_Delaunay_Mesh(const vector<vector<int>> &segs, vector<vector<double>> &xs, vector<double> &params);
-Mesh GeoComp_Delaunay_Mesh(vector<vector<double>> &xs);
+Mesh GeoMesh_Delaunay_Mesh(vector<vector<double>> &xs, vector<double> &params);
+Mesh GeoMesh_Delaunay_Mesh(const vector<vector<int>> &segs, vector<vector<double>> &xs, vector<double> &params);
+Mesh GeoMesh_Delaunay_Mesh(vector<vector<double>> &xs);
 void Flip_Insertion(Mesh* DT, int* vid, int tri_s);
 void Flip_Insertion_segment(Mesh* DT, int vid, int hfid, Spline* spl);
 bool find_enclosing_tri(Mesh* DT, int* tri, int vid);
@@ -64,10 +69,7 @@ bool check_sibhfs(Mesh* DT);
 bool check_jacobians(Mesh* DT);
 double check_minangle(Mesh* DT);
 vector<bool> find_boundary_nodes(Mesh* DT);
-bool inside_tri(const Mat &xs, const vector<double> &ps);
-
-// delaunay Mesh functions 3d
-Mesh GeoComp_Delaunay_Mesh3d(vector<vector<double>> &xs);
+bool inside_tri(const vector<vector<double>> &xs, const vector<double> &ps);
 
 // Mesh utility functions
 vector<vector<int>> find_boundary(Mesh* msh, bool findloop);

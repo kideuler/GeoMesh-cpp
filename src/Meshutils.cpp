@@ -1,9 +1,9 @@
-#include "GeoComp.hpp"
+#include "GeoMesh.hpp"
 using namespace std;
 
 vector<vector<int>> find_boundary(Mesh* msh, bool findloop){
     int nv = msh->coords.size();
-    vector<vector<int>> bdy = Zerosi(nv,2);
+    vector<vector<int>> bdy = Zeros<int>(nv,2);
     int nb=0;
     for (int i = 0; i<msh->nelems; i++){
         for (int j = 0; j<3; j++){
@@ -74,9 +74,9 @@ bool check_sibhfs(Mesh* DT){
  * @return false 
  */
 bool check_jacobians(Mesh* DT){
-    const Mat dphi = {{-1,-1},{1,0},{0,1}};
-    Mat ps = {{0,0},{0,0},{0,0}};
-    Mat J;
+    const vector<vector<double>> dphi = {{-1,-1},{1,0},{0,1}};
+    vector<vector<double>> ps = {{0,0},{0,0},{0,0}};
+    vector<vector<double>> J;
     double detJ;
     bool check = true;
     for (int i = 0; i<DT->nelems; i++){

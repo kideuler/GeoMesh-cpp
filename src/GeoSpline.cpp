@@ -1,4 +1,4 @@
-#include "GeoComp.hpp"
+#include "GeoMesh.hpp"
 #include <unistd.h>
 #include <Eigen/Sparse>
 using namespace std;
@@ -134,7 +134,7 @@ Spline spline_init(const vector<vector<double>> &xs, int degree){
 }
 
 vector<vector<double>> construct_CVM(double t[],int nv, int degree){
-    vector<vector<double>> V = Zeros(nv*degree, degree+1);
+    vector<vector<double>> V = Zeros<double>(nv*degree, degree+1);
 
     int k = 0;
     for (int i = 0; i<degree; i++){
@@ -159,9 +159,9 @@ static Spline ndegree_spline(const vector<vector<double>> &xs, int degree){
     Spline spl;
     spl.degree = degree;
     spl.nv = nv;
-    spl.coords = Zeros(nv,2);
-    spl.xweights = Zeros(nv, degree+1);
-    spl.yweights = Zeros(nv, degree+1);
+    spl.coords = Zeros<double>(nv,2);
+    spl.xweights = Zeros<double>(nv, degree+1);
+    spl.yweights = Zeros<double>(nv, degree+1);
     spl.params.resize(nv+1);
 
     int ndofs = (degree+1)*nv;
@@ -240,9 +240,9 @@ static Spline Cubic_spline(const vector<vector<double>> &xs){
     Spline spl;
     spl.degree = 3;
     spl.nv = nv;
-    spl.coords = Zeros(nv,2);
-    spl.xweights = Zeros(nv, 4);
-    spl.yweights = Zeros(nv, 4);
+    spl.coords = Zeros<double>(nv,2);
+    spl.xweights = Zeros<double>(nv, 4);
+    spl.yweights = Zeros<double>(nv, 4);
     spl.params.resize(nv+1);
 
     // set up eigen parameters
@@ -298,9 +298,9 @@ static Spline Quadratic_spline(const vector<vector<double>> &xs){
     Spline spl;
     spl.degree = 2;
     spl.nv = nv;
-    spl.coords = Zeros(nv,2);
-    spl.xweights = Zeros(nv, 3);
-    spl.yweights = Zeros(nv, 3);
+    spl.coords = Zeros<double>(nv,2);
+    spl.xweights = Zeros<double>(nv, 3);
+    spl.yweights = Zeros<double>(nv, 3);
     spl.params.resize(nv+1);
 
     // set up eigen parameters

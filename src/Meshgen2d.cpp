@@ -1,4 +1,4 @@
-#include "GeoComp.hpp"
+#include "GeoMesh.hpp"
 #include <unistd.h>
 using namespace std;
 
@@ -55,7 +55,7 @@ void Mesh::compute_AHF(){
     int nelems = elems.size();
     int nv = coords.size();
     int nf = elems[0].size();
-    sibhfs = Zerosi(nelems, nf);
+    sibhfs = Zeros<int>(nelems, nf);
     int* is_index = new int[nv+1];
     int v,c,vn;
 
@@ -138,25 +138,22 @@ void Mesh::compute_AHF(){
     delete is_index, v2nv, v2he_fid, v2he_leid;
 }
 
-/// subfunctions for delaunay Mesh
+/// subfunctions for delaunay triangulation
 double eval_alpha(const vector<vector<double>> xs,double r_ref);
 static vector<double> circumcenter(const vector<vector<double>> xs);
-static bool inside_circumtri(const Mat xs, const vector<double> ps);
+static bool inside_circumtri(const vector<vector<double>> xs, const vector<double> ps);
 static bool inside_diametral(Mesh* DT, int hfid, int vid);
 void Recursive_tri_delete(Mesh* DT, int hfid);
 static bool Line_cross(const vector<double> &p1, const vector<double> &p2, const vector<double> &p3, const vector<double> &p4);
 static bool Ray_in_triangle(Mesh* DT, int eid, int nid, int vid);
-static double area_tri(const Mat &xs);
-static double min_angle(const Mat &xs);
+static double area_tri(const vector<vector<double>> &xs);
+static double min_angle(const vector<vector<double>> &xs);
 void recursive_delauney_flip(Mesh* DT, int eid, int lid);
 void find_bad_tri_recursive(Mesh* DT, int tri, int *nbad, int vid);
 void find_bad_tri_recursive(Mesh* DT, int tri, int *nbad, int vid, bool* exitf);
 void find_bad_tri(Mesh* DT, int tri, int *nbad, int vid);
 void flip_edge(Mesh* DT, int eid, int lid);
 vector<int> facet_reorder(Mesh *DT, int *nsegs);
-
-
-/// array functions for point data
 static vector<double> find_center(const vector<vector<double>> &xs);
 void reorder(vector<vector<double>> &xs);
 
@@ -192,9 +189,9 @@ int find_hfid(Mesh* DT, int eid){
  * @param DT Triangultion data structure
  * @param r_ref radius of circumcircle (double)
  */
-void GeoComp_refine(Mesh* DT, double r_ref, Spline* spl){
+void GeoMesh_refine(Mesh* DT, double r_ref, Spline* spl){
     auto f = [r_ref](vector<double> xs) {return r_ref; };
-    GeoComp_refine(DT, f, spl);
+    GeoMesh_refine(DT, f, spl);
 }
 
 /**
@@ -203,7 +200,7 @@ void GeoComp_refine(Mesh* DT, double r_ref, Spline* spl){
  * @param DT Triangultion data structure
  * @param r_ref radius of circumcircle (function of position)
  */
-void GeoComp_refine(Mesh* DT, function<double(vector<double>)> r_ref, Spline* spl){
+void GeoMesh_refine(Mesh* DT, function<double(vector<double>)> r_ref, Spline* spl){
     // random number generator
     default_random_engine re;
     uniform_real_distribution<double> unif(-1, 1);
@@ -212,7 +209,7 @@ void GeoComp_refine(Mesh* DT, function<double(vector<double>)> r_ref, Spline* sp
     bool exitl;
     double alpha,theta;
     int nv = (*DT).coords.size();
-    Mat ps = Zeros(3,2);
+    vector<vector<double>> ps = Zeros<double>(3,2);
     int tri,eid,lid,ub;
 
     // finding total area and estimate to define maximum size bounds
@@ -223,7 +220,7 @@ void GeoComp_refine(Mesh* DT, function<double(vector<double>)> r_ref, Spline* sp
         ps[0] = (*DT).coords[(*DT).elems[n][0]];
         ps[1] = (*DT).coords[(*DT).elems[n][1]];
         ps[2] = (*DT).coords[(*DT).elems[n][2]];
-        mid = (ps[0]+ps[1]+ps[2])/3;
+        mid = (ps[0]+ps[1]+ps[2])/3.0;
         total_area += area_tri(ps);
         minr = min(r_ref(mid),minr);
     }
@@ -232,7 +229,7 @@ void GeoComp_refine(Mesh* DT, function<double(vector<double>)> r_ref, Spline* sp
     if (1.2*total_area/area_single > ub){
         ub = (int) 1.2*total_area/area_single;
     }
-
+    cout << ub << " " << total_area << " " << area_single << endl;
     DT->coords.resize(ub);
     DT->param.resize(ub);
     DT->elems.resize(ub);
@@ -274,7 +271,6 @@ void GeoComp_refine(Mesh* DT, function<double(vector<double>)> r_ref, Spline* sp
                 tri = e;
                 inside_domain = find_enclosing_tri(DT, &tri, nv);
                 //cout << alpha << endl;
-                //cout << theta << endl;
                 if (!inside_domain){
                     if (tri == -1){
                         cout << "find triangle location failed: deleting point" << endl;
@@ -373,10 +369,10 @@ void GeoComp_refine(Mesh* DT, function<double(vector<double>)> r_ref, Spline* sp
  * @param xs Point data (nv -by- 2)
  * @return Constrained delaunay Mesh
  */
-Mesh GeoComp_Delaunay_Mesh(const vector<vector<int>> &segs, vector<vector<double>> &xs, vector<double> &params){
+Mesh GeoMesh_Delaunay_Mesh(const vector<vector<int>> &segs, vector<vector<double>> &xs, vector<double> &params){
 
     // segs define boundary segments for the mesh
-    Mesh DT = GeoComp_Delaunay_Mesh(xs,params);
+    Mesh DT = GeoMesh_Delaunay_Mesh(xs,params);
     DT.bwork.resize(DT.nelems);
     DT.facets.resize(DT.nelems);
     int nv = xs.size();
@@ -534,8 +530,8 @@ static bool Ray_in_triangle(Mesh* DT, int eid, int nid, int vid){
  * @param params parameters of the spline
  * @return Constrained delaunay Mesh
  */
-Mesh GeoComp_Delaunay_Mesh(vector<vector<double>> &xs, vector<double> &params){
-    Mesh DT = GeoComp_Delaunay_Mesh(xs);
+Mesh GeoMesh_Delaunay_Mesh(vector<vector<double>> &xs, vector<double> &params){
+    Mesh DT = GeoMesh_Delaunay_Mesh(xs);
     int nv = DT.coords.size();
     assert(nv == params.size());
     DT.param = params;
@@ -548,7 +544,7 @@ Mesh GeoComp_Delaunay_Mesh(vector<vector<double>> &xs, vector<double> &params){
  * @param xs Point data (nv -by- 2)
  * @return Delaunay Mesh 
  */
-Mesh GeoComp_Delaunay_Mesh(vector<vector<double>> &xs){
+Mesh GeoMesh_Delaunay_Mesh(vector<vector<double>> &xs){
     // size checking
     default_random_engine re;
     uniform_real_distribution<double> unif(-1, 1);
@@ -557,10 +553,10 @@ Mesh GeoComp_Delaunay_Mesh(vector<vector<double>> &xs){
 
     Mesh DT;
     int ub = 2*nv*nv;
-    DT.coords = Zeros(nv+3,2);
-    DT.elems = Zerosi(ub,3);
-    DT.sibhfs = Zerosi(ub,3);
-    DT.facets = Zerosi(ub,2);
+    DT.coords = Zeros<double>(nv+3,2);
+    DT.elems = Zeros<int>(ub,3);
+    DT.sibhfs = Zeros<int>(ub,3);
+    DT.facets = Zeros<int>(ub,2);
     DT.delete_elem.resize(ub);
     DT.on_boundary.resize(ub);
     vector<double> a = min_array(xs);
@@ -737,7 +733,7 @@ void Flip_Insertion_segment(Mesh* DT, int vid, int hfid, Spline* spl){
     double a = DT->param[DT->elems[eid][lid]];
     double b = DT->param[DT->elems[eid][(lid+1)%3]];
     if (abs(b-a) < 1e-6 || nvS == 0){
-        DT->coords[vid] = 0.5*(DT->coords[DT->elems[eid][lid]] + DT->coords[DT->elems[eid][(lid+1)%3]]);
+        DT->coords[vid] = (DT->coords[DT->elems[eid][lid]] + DT->coords[DT->elems[eid][(lid+1)%3]])*0.5;
     } else {
         if (abs(b-a) > 0.5){
             if (b<a){
@@ -969,7 +965,7 @@ void Bowyer_watson2d(Mesh* DT, int vid, int tri_s,bool refine){
         if (exitf) {
             eid = hfid2eid(nbad)-1;
             lid = hfid2lid(nbad)-1;
-            DT->coords[vid] = (DT->coords[DT->elems[eid][(lid+1)%3]] + DT->coords[DT->elems[eid][lid]])/2;
+            DT->coords[vid] = (DT->coords[DT->elems[eid][(lid+1)%3]] + DT->coords[DT->elems[eid][lid]])/2.0;
             nbad = 0;
             find_bad_tri_recursive(DT, eid, &nbad, vid);
         }
@@ -1217,6 +1213,7 @@ void delete_tris(Mesh* DT){
     DT->elems.resize(nelems);
     DT->sibhfs.resize(nelems);
 }
+
 /**
  * @brief Delete triangles and reorganize data in Mesh DT and keep track of specific triangle tri
  * 
@@ -1312,7 +1309,7 @@ static vector<double> circumcenter(const vector<vector<double>> xs){
 /// find offcenter steiner point outlined in https://doi.org/10.1016/j.comgeo.2008.06.002
 static vector<double> off_circumcenter(const vector<vector<double>> xs){
     vector<double> c1 = circumcenter(xs);
-    vector<vector<double>> ps = Zeros(3,2);
+    vector<vector<double>> ps = Zeros<double>(3,2);
     vector<double> m(2);
     double distpq = 1e6;
     double temp;
@@ -1325,11 +1322,11 @@ static vector<double> off_circumcenter(const vector<vector<double>> xs){
             ps[1] = xs[(i+1)%3];
         }
     }
+    return c1;
 }
 
-
 /// find whether point is inside the circumcircle of a triangle
-static bool inside_circumtri(const Mat xs, const vector<double> ps){
+static bool inside_circumtri(const vector<vector<double>> xs, const vector<double> ps){
     vector<double> C = circumcenter(xs);
     double R = pow(xs[0][0]-C[0],2) + pow(xs[0][1] - C[1],2);
     bool D = pow(ps[0]-C[0],2) + pow(ps[1] - C[1],2) < R;
@@ -1347,7 +1344,7 @@ static bool inside_diametral(Mesh* DT, int hfid, int vid){
     return dist < r;
 }
 /// find whether point is inside a triangle
-bool inside_tri(const Mat &xs, const vector<double> &ps){
+bool inside_tri(const vector<vector<double>> &xs, const vector<double> &ps){
     double val1 = (ps[0]-xs[1][0])*(xs[0][1]-xs[1][1]) - (xs[0][0]-xs[1][0])*(ps[1]-xs[1][1]);
     double val2 = (ps[0]-xs[2][0])*(xs[1][1]-xs[2][1]) - (xs[1][0]-xs[2][0])*(ps[1]-xs[2][1]);
     double val3 = (ps[0]-xs[0][0])*(xs[2][1]-xs[0][1]) - (xs[2][0]-xs[0][0])*(ps[1]-xs[0][1]);
@@ -1359,7 +1356,7 @@ bool inside_tri(const Mat &xs, const vector<double> &ps){
 vector<int> facet_reorder(Mesh* DT, int *nsegs){
     int nsegs2 = 0;
     int i,j;
-    vector<vector<int>> segs2 = Zerosi(*nsegs,2);
+    vector<vector<int>> segs2 = Zeros<int>(*nsegs,2);
     vector<int> vedge2(*nsegs);
     for (i=0;i<(*nsegs);i++){
         (*DT).bwork[i] = true;
@@ -1517,7 +1514,7 @@ void reorder(vector<vector<double>> &xs){
     }
 }
 /// find area of a triangle
-static double area_tri(const Mat &xs){
+static double area_tri(const vector<vector<double>> &xs){
     vector<double> u(2);
     vector<double> v(2);
     u =  xs[1]-xs[0];
@@ -1525,7 +1522,7 @@ static double area_tri(const Mat &xs){
     return abs(u[0]*v[1] - u[1]*v[0])/2;
 }
 /// find minimal angle in a triangle
-static double min_angle(const Mat &xs){
+static double min_angle(const vector<vector<double>> &xs){
     double e1[2] = {xs[1][0]-xs[0][0], xs[1][1]-xs[0][1]};
     double n1 = sqrt(e1[0]*e1[0] + e1[1]*e1[1]);
     double e2[2] = {xs[2][0]-xs[1][0], xs[2][1]-xs[1][1]};
@@ -1540,7 +1537,7 @@ static double min_angle(const Mat &xs){
 }
 
 double check_minangle(Mesh* DT){
-    Mat ps = {{0,0},{0,0},{0,0}};
+    vector<vector<double>> ps = {{0,0},{0,0},{0,0}};
     double theta = 360.0;
     for (int i = 0; i<DT->nelems; i++){
         ps[0] = DT->coords[DT->elems[i][0]];
