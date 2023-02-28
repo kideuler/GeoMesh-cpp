@@ -1,7 +1,7 @@
 CC = g++
 CFLAGS = -I -Isrc  -Iinclude -Iextern/eigen
-DEPS = src/Meshgen2d.cpp src/Meshutils.cpp src/GeoSpline.cpp
-DEPS_O = Meshgen2d.o Meshutils.o GeoSpline.o
+DEPS = src/Meshgen2d.cpp src/Meshutils.cpp src/GeoSpline.cpp src/MeshSmooth.cpp src/MeshSurface.cpp
+DEPS_O = Meshgen2d.o Meshutils.o GeoSpline.o MeshSmooth.o MeshSurface.o
 OBJ = test
 
 make:

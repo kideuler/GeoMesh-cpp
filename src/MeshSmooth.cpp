@@ -2,50 +2,36 @@
 #include <unistd.h>
 using namespace std;
 
+double isometry_energy_tri(vector<vector<double>>& xs, double refarea, double mu);
 double isometry_energy_tri(vector<vector<double>>& xs, vector<vector<double>> &Grad, vector<vector<vector<double>>> &Hess, double refarea, double mu);
-double mesh_smoothing_tri_2d_iter(Mesh* mesh, vector<bool> no_move, vector<double> refareas, double mu, double h_max);
 
-void mesh_smoothing_2d(Mesh* mesh, vector<bool> no_move, function<double(vector<double>)> r_ref, double mu){
+void Mesh::mesh_smoothing_2d(vector<bool> no_move, int niters, double mu,vector<double> refareas){
 
-    // calculate reference areas
-    vector<double> refareas(mesh->nelems);
-    int i,j;
-    vector<double> centroid(2);
-    double h,h_max;
-    h=0;
-    if (mu > 0){
-    for (i=0; i<mesh->nelems; i++){
-        centroid = (mesh->coords[mesh->elems[i][0]]+mesh->coords[mesh->elems[i][1]]+mesh->coords[mesh->elems[i][2]])/3;
-        h = (3/sqrt(3))*r_ref(centroid);
-        h_max = max(h,h_max);
-        refareas[i] = h*h/2;
-    }
-    } else {
-        for (i=0; i<mesh->nelems; i++){
-            for (j=0; j<3; j++){
-                h = norm(mesh->coords[mesh->elems[i][(j+1)%3]]-mesh->coords[mesh->elems[i][j]]);
-                h_max = max(h,h_max);
-            }
-        }
+    // calculate CRS one-ring elems
+    if (stl.index.size() == 0){
+        compute_Onering();
     }
 
     // main smoothing algorithm
-    double tol = 0.3*h_max;
-    double errs = 1e6;
     int iter = 0;
-    while (errs > tol && iter < 10){
+    double Energy = 1e10;
+    double Energy_old = 1e12;
+    
+    while (iter < niters && Energy_old > Energy){
         // iteration of Energy based smoothing
-        errs = mesh_smoothing_tri_2d_iter(mesh, no_move, refareas, mu, h_max);
+        Energy_old = Energy;
+        Energy = mesh_smoothing_tri_2d_iter(no_move, mu, refareas, Energy_old);
+
         iter++;
     }
 }
 
 
-double mesh_smoothing_tri_2d_iter(Mesh* mesh, vector<bool> no_move, vector<double> refareas, double mu, double h_max){
+double Mesh::mesh_smoothing_tri_2d_iter(vector<bool> no_move, double mu, vector<double> refareas, double Energy_old){
 
-    int nv = mesh->coords.size();
-    Mat* Grads = new Mat;
-    *Grads = Zeros(2,nv);
+    int nv = coords.size();
+    vector<vector<double>>* Grads = new vector<vector<double>>;
+    *Grads = Zeros<double>(2,nv);
     vector<vector<vector<double>>>* Hess = new vector<vector<vector<double>>>;
     (*Hess).resize(2);
     (*Hess)[0].resize(2);
@@ -54,8 +40,8 @@ double mesh_smoothing_tri_2d_iter(Mesh* mesh, vector<bool> no_move, vector<doubl
     (*Hess)[1][0].resize(nv);
     (*Hess)[0][1].resize(nv);
     (*Hess)[1][1].resize(nv);
-    Mat ps = Zeros(3,2);
-    Mat Grad_elem = Zeros(2,3);
+    vector<vector<double>> ps = Zeros<double>(3,2);
+    vector<vector<double>> Grad_elem = Zeros<double>(2,3);
     vector<vector<vector<double>>> Hess_elem;
     Hess_elem.resize(2);
     Hess_elem[0].resize(2);
@@ -66,16 +52,22 @@ double mesh_smoothing_tri_2d_iter(Mesh* mesh, vector<bool> no_move, vector<doubl
     Hess_elem[1][1].resize(3);
 
     // Accurmulating Energy
+    double Energy_total = 0.0;
     double Energy;
     int v;
-    for (int n = 0; n<mesh->nelems; n++){
-        ps[0] = mesh->coords[mesh->elems[n][0]];
-        ps[1] = mesh->coords[mesh->elems[n][1]];
-        ps[2] = mesh->coords[mesh->elems[n][2]];
+    bool use_area = refareas.size() != 0;
+    for (int n = 0; n<nelems; n++){
+        ps[0] = coords[elems[n][0]];
+        ps[1] = coords[elems[n][1]];
+        ps[2] = coords[elems[n][2]];
 
-        Energy = isometry_energy_tri(ps, Grad_elem, Hess_elem, refareas[n], 0.0);
+        if (use_area){
+            Energy = isometry_energy_tri(ps, Grad_elem, Hess_elem, refareas[n], mu);
+        } else {
+            Energy = isometry_energy_tri(ps, Grad_elem, Hess_elem, 0.0, mu);
+        }
         for (int ii = 0; ii<3; ii++){
-            v = mesh->elems[n][ii];
+            v = elems[n][ii];
             (*Grads)[0][v] = (*Grads)[0][v] + Grad_elem[0][ii];
             (*Grads)[1][v] = (*Grads)[1][v] + Grad_elem[1][ii];
 
@@ -84,24 +76,28 @@ double mesh_smoothing_tri_2d_iter(Mesh* mesh, vector<bool> no_move, vector<doubl
             (*Hess)[1][0][v] = (*Hess)[1][0][v] + Hess_elem[1][0][ii];
             (*Hess)[1][1][v] = (*Hess)[1][1][v] + Hess_elem[1][1][ii];
         }
+        Energy_total += Energy;
     }
 
 
     // Moving nodes
-    vector<vector<double>> H = Zeros(2,2);
-    vector<vector<double>> H_inv = Zeros(2,2);
+    // Energy_total < Energy_old
+    vector<vector<double>> H = Zeros<double>(2,2);
+    vector<vector<double>> H_inv = Zeros<double>(2,2);
     vector<double> G(2);
     vector<double> xs_smooth(2);
+    vector<vector<double>> xs_diff = Zeros<double>(nv,2);
     double det;
-    double delta = 0.0;
+    double alpha;
+    int iter;
     for (int n = 0; n<nv; n++){
         if (!no_move[n]){
         H[0][0] = (*Hess)[0][0][n];
         H[0][1] = (*Hess)[0][1][n];
         H[1][0] = (*Hess)[1][0][n];
         H[1][1] = (*Hess)[1][1][n];
-        G[0] = (*Grads)[0][n];
-        G[1] = (*Grads)[1][n];
+        G[0] = -(*Grads)[0][n];
+        G[1] = -(*Grads)[1][n];
 
         det = H[0][0]*H[1][1] - H[1][0]*H[0][1];
         if (abs(det) > 1e-3){
@@ -109,22 +105,93 @@ double mesh_smoothing_tri_2d_iter(Mesh* mesh, vector<bool> no_move, vector<doubl
             H_inv[1][0] = -H[1][0]/det;
             H_inv[0][1] = -H[0][1]/det;
             H_inv[1][1] = H[0][0]/det;
-            xs_smooth = H_inv*(-G);
-            if (norm(xs_smooth) < h_max){
-            mesh->coords[n] = mesh->coords[n] + xs_smooth;
-            delta += xs_smooth[0]*xs_smooth[0] + xs_smooth[1]*xs_smooth[1];
+            xs_smooth = H_inv*(G);
+            alpha = 0.5;
+            iter = 0;
+            while (!check_jacobians_node(n,xs_smooth*alpha) && iter<8){
+                alpha = alpha/2;
+                //cout << "naegative jacobian found while trying to move node: " << n << " with alpha: " << alpha << endl;
+                iter++;
+            }
+            if (iter < 8 && norm(xs_smooth*alpha) < 1){
+                xs_diff[n] = xs_smooth*alpha;
             }
         }
         }
     }
     delete Grads, Hess;
 
-    delta = sqrt(delta);
-    return delta;
+
+    // evaulating total energy for new nodal placement
+    double Energy_new = 0;
+    for (int n = 0; n<nelems; n++){
+        ps[0] = coords[elems[n][0]]+xs_diff[elems[n][0]];
+        ps[1] = coords[elems[n][1]]+xs_diff[elems[n][1]];
+        ps[2] = coords[elems[n][2]]+xs_diff[elems[n][2]];
+        if (use_area){
+            Energy = isometry_energy_tri(ps, refareas[n], mu);
+        } else {
+            Energy = isometry_energy_tri(ps, 1.0, mu);
+        }
+        Energy_new += Energy;
+    }
+    Energy_new = Energy_new / (double) nelems;
+    Energy_old = Energy_total / (double) nelems;
+    if (Energy_new < Energy_old){
+        coords += xs_diff;
+    }
+    cout << "Energy old: " << Energy_old << " Energy new: " << Energy_new << endl;
+    return Energy_new;
 }
 
+bool Mesh::check_jacobians_node(int vid, vector<double> dir){
+    const vector<vector<double>> dphi = {{-1,-1},{1,0},{0,1}};
+    vector<vector<double>> ps =Zeros<double>(3,2);
+    vector<vector<double>> J = Zeros<double>(2,2);
+    int hvid,eid,lvid;
+    double detJ;
+    for (int v = stl.index[vid]; v<stl.index[vid+1]-1; v++){
+        hvid = stl.hvids[v];
+        eid = hfid2eid(hvid)-1;
+        lvid = hfid2lid(hvid)-1;
+        ps[0] = coords[vid]+dir;
+        ps[1] = coords[elems[eid][(lvid+1)%3]];
+        ps[2] = coords[elems[eid][(lvid+2)%3]];
+        J = Transpose(ps)*dphi;
+        detJ = J[0][0]*J[1][1] - J[0][1]*J[1][0];
+        if (detJ < 0){
+            return false;
+        }
+    }
 
+    return true;
+}
 
+double isometry_energy_tri(vector<vector<double>>& xs, double refarea, double mu){
+
+// computing angle based energy
+double e12[2],e12_orth[2],e23[2],e23_orth[2],e31[2],e31_orth[2], sql12, sql23, sql31;
+e12[0] = xs[1][0]-xs[0][0]; e12[1] = xs[1][1]-xs[0][1];
+sql12 = e12[0]*e12[0] + e12[1]*e12[1];
+e23[0] = xs[2][0]-xs[1][0]; e23[1] = xs[2][1]-xs[1][1];
+sql23 = e23[0]*e23[0] + e23[1]*e23[1];
+e31[0] = xs[0][0]-xs[2][0]; e31[1] = xs[0][1]-xs[2][1];
+sql31 = e31[0]*e31[0] + e31[1]*e31[1];
+double area2 = (e12[0]*e23[1] - e12[1]*e23[0]);
+double area = 0.5*area2;
+e12_orth[0] = -e12[1]; e12_orth[1] = e12[0];
+e23_orth[0] = -e23[1]; e23_orth[1] = e23[0];
+e31_orth[0] = -e31[1]; e31_orth[1] = e31[0];
+double cts[3] = {1/(sqrt(3)*area),1/(sqrt(3)*area),1/(sqrt(3)*area)};
+
+double Energy = (cts[2]*sql12 + cts[0]*sql23 + cts[1]*sql31);
+
+if (mu > 0){
+    double c = 2*refarea/area2;
+    Energy = (1-mu)*Energy + mu*(area2/(2*refarea) + c);
+}
+return Energy;
+}
 
 double isometry_energy_tri(vector<vector<double>>& xs, vector<vector<double>> &Grad, vector<vector<vector<double>>> &Hess, double refarea, double mu){
 

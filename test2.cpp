@@ -39,13 +39,46 @@ vector<vector<double>> Flower(int npoints){
 */
 
 int main(){
-    int n = 80;
+    // loading bunny mesh
+    string filename = "data/bunny.obj";
+    Mesh bunny = ReadObj_tri(filename);
+    bunny.compute_AHF();
+    vector<double> refareas(bunny.nelems);
+    vector<vector<double>> ps = Zeros<double>(3,2);
+    double total=0.0;
+    for (int i = 0; i<bunny.nelems; i++){
+        ps[0] = bunny.coords[bunny.elems[i][0]];
+        ps[1] = bunny.coords[bunny.elems[i][1]];
+        ps[2] = bunny.coords[bunny.elems[i][2]];
+        refareas[i] = area_tri(ps);
+        total += refareas[i];
+    }
+    refareas = refareas / total;
+    vector<vector<double>> P =  Parametric_Mapping(&bunny);
+    refareas *= M_PI*0.25;
+    Mesh S = bunny;
+    S.coords = P;
+    cout << "finished writing to file" << endl;
+    vector<bool> bnd;
+    bnd.assign(S.coords.size(), false);
+    cout << "minimum angle: " << check_minangle(&S) << endl;
+    check_jacobians(&S);
+    S.mesh_smoothing_2d(S.find_boundary_nodes(), 1500, 0.8, refareas);
+    cout << "minimum angle: " << check_minangle(&S) << endl;
+    WrtieVtk_tri(S);
+    cout << "finished writing to file" << endl;
+
+
+    int n = 300;
+    vector<vector<double>> xs = Circle(n);
     Spline spl;
     spl.nv = 0; 
-
-    vector<vector<double>> xs = Circle(n);
-    vector<vector<int>> segs = Zeros<int>(n,2);
+    //xs.push_back({0,0});
+    //xs.push_back({1,0});
+    //xs.push_back({1,1});
+    //xs.push_back({0,1});
     double h = 0.0;
+    vector<vector<int>> segs = Zeros<int>(n,2);
     for (int i = 0; i<n; i++){
         segs[i][0] = i;
         segs[i][1] = (i+1)%n;
@@ -54,6 +87,16 @@ int main(){
     h = 1*(sqrt(3)/3)*(h/(double(n)-1));
 
     Mesh msh = GeoMesh_Delaunay_Mesh(xs);
-    GeoMesh_refine(&msh, h, &spl);
+    msh.Delaunay_refine(h);
+    cout << "minimum angle: " << check_minangle(&msh) << endl;
+    vector<bool> free_bnd(msh.coords.size());
+    msh.mesh_smoothing_2d(free_bnd, 50, 0.0);
+    cout << "minimum angle: " << check_minangle(&msh) << endl;
+    check_jacobians(&msh);
+    
+    
+    Parametric2Surface(&bunny, S.coords, &msh);
+    // writing
     WrtieVtk_tri(msh);
+    cout << "finished writing to file" << endl;
 }

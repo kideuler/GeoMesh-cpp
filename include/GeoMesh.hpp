@@ -7,6 +7,20 @@
 #include <functional>
 using namespace std;
 
+struct Spline {
+    int nv;
+    int degree;
+    vector<vector<double>> coords;
+    vector<vector<double>> xweights;
+    vector<vector<double>> yweights;
+    vector<double> params;
+};
+
+struct Stencil {
+    vector<int> index;
+    vector<int> hvids;
+};
+
 struct Mesh {
     vector<vector<double>> coords;
     vector<vector<double>> normals;
@@ -20,20 +34,26 @@ struct Mesh {
     vector<int> vedge;
     vector<bool> bwork;
     vector<bool> on_boundary;
+    Spline spl;
+    Stencil stl;
+
+    // major member functions
     void compute_AHF();
-    void Delaunay_refine(function<double(vector<double>)> r_ref, Spline* spl);
-    void Delaunay_refine(double r_ref, Spline* spl);
+    void compute_Onering(int maxne = 10);
     void Delaunay_refine(function<double(vector<double>)> r_ref);
     void Delaunay_refine(double r_ref);
-};
+    void mesh_smoothing_2d(vector<bool> no_move, int niters = 5, double mu = 0.0, vector<double> refareas={});
+    double mesh_smoothing_tri_2d_iter(vector<bool> no_move,  double mu, vector<double> refareas, double Energy_old);
 
-struct Spline {
-    int nv;
-    int degree;
-    vector<vector<double>> coords;
-    vector<vector<double>> xweights;
-    vector<vector<double>> yweights;
-    vector<double> params;
+    // minor utility functions
+    void delete_tris();
+    vector<bool> find_boundary_nodes();
+    bool find_enclosing_tri(int *starting_tri, vector<double> &ps);
+    void Flip_Insertion(int* vid, int starting_tri);
+    void Flip_Insertion_segment(int vid, int hfid);
+    void flip_edge(int eid, int lid);
+    bool inside_diametral(int hfid, vector<double> &ps);
+    bool check_jacobians_node(int vid, vector<double> dir = {0.0,0.0});
 };
 
 // Surface remeshing
@@ -48,35 +68,23 @@ vector<double> spline_var(Spline* spl, double t, int order=0);
 double spline_curvature(Spline* spl, double t);
 vector<double> spline_point_segment(Spline* spl, double a, double b, double ratio);
 
-// mesh smoothing functions
-void mesh_smoothing_2d(Mesh* mesh, vector<bool> no_move, function<double(vector<double>)> r_ref, double mu);
-
-// mesh refinement functions
-void GeoMesh_refine(Mesh* DT, function<double(vector<double>)> r_ref, Spline* spl);
-void GeoMesh_refine(Mesh* DT, double r_ref, Spline* spl);
-
 // delaunay Mesh functions 2d
 Mesh GeoMesh_Delaunay_Mesh(vector<vector<double>> &xs, vector<double> &params);
-Mesh GeoMesh_Delaunay_Mesh(const vector<vector<int>> &segs, vector<vector<double>> &xs, vector<double> &params);
+Mesh GeoMesh_Delaunay_Mesh(const vector<vector<int>> &segs, vector<vector<double>> &xs);
 Mesh GeoMesh_Delaunay_Mesh(vector<vector<double>> &xs);
-void Flip_Insertion(Mesh* DT, int* vid, int tri_s);
-void Flip_Insertion_segment(Mesh* DT, int vid, int hfid, Spline* spl);
-bool find_enclosing_tri(Mesh* DT, int* tri, int vid);
 void Bowyer_watson2d(Mesh* DT, int vid, int tri_s,bool refine);
-void delete_tris(Mesh* DT);
-void delete_tris(Mesh* DT, int* tri);
-bool check_sibhfs(Mesh* DT);
-bool check_jacobians(Mesh* DT);
 double check_minangle(Mesh* DT);
+double area_tri(const vector<vector<double>> &xs);
 vector<bool> find_boundary_nodes(Mesh* DT);
 bool inside_tri(const vector<vector<double>> &xs, const vector<double> &ps);
 
-// Mesh utility functions
+// Meshutils functions
 vector<vector<int>> find_boundary(Mesh* msh, bool findloop);
 void WrtieVtk_tri(const Mesh &msh);
-void WrtieVtk_tet(const Mesh &msh);
 void WrtieVtk_tri(const Mesh &msh, const vector<double> &data);
 Mesh ReadObj_tri(string filename);
+bool check_sibhfs(Mesh* DT);
+bool check_jacobians(Mesh* DT);
 
 // small functions to be used in multiple files
 vector<double> min_array(const vector<vector<double>> &xs);

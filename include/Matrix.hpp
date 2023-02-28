@@ -125,6 +125,22 @@ vector<T> operator*(const vector<vector<T>> &A, const vector<T> &b){
     return prod;
 }
 
+// matrix scalar multiplication
+template <typename T>
+vector<vector<T>> operator*(const vector<vector<T>> &A, T a){
+    int m = A.size();
+    int n = A[0].size();
+
+    vector<vector<T>> prod;
+    prod.assign(m, vector<T>(n, 0));
+    for(int i=0; i<m; i++){
+        for(int j=0; j<n;j++){
+            prod[i][j] = A[i][j]*a;
+        }
+    }
+    return prod;
+}
+
 /// Vector operators
 
 // vector scalar multiplication
@@ -134,6 +150,15 @@ vector<T>  operator*(const vector<T>  &u, T a){
     vector<T> prod(n);
     for (int i = 0; i<u.size(); i++){
         prod[i] = u[i]*a;
+    }
+    return prod;
+}
+template <typename T>
+vector<T>  operator*(T a, const vector<T>  &u){
+    int n = u.size();
+    vector<T> prod(n);
+    for (int i = 0; i<u.size(); i++){
+        prod[i] = a*u[i];
     }
     return prod;
 }

@@ -2,53 +2,27 @@
 #include <unistd.h>
 using namespace std;
 
-/**
- * @brief Converts half-facet id to element id
- * 
- * @param hfid Half facet id
- * @return element id
- */
-int hfid2eid(int hfid){
-    return (hfid >> 8);
-}
-/**
- * @brief Convert half-facet id to local edge id
- * 
- * @param hfid Half facet id
- * @return local edge id
- */
-int hfid2lid(int hfid){
-    return (hfid&255) + 1;
-}
-/**
- * @brief Converts element id and local edge id to half-facet id
- * 
- * @param eid element id
- * @param lid local edge id
- * @return half-facet id
- */
-int elids2hfid(int eid, int lid){
-    return ((eid << 8) + lid - 1);
-}
+/// subfunctions for delaunay triangulation
+double eval_alpha(const vector<vector<double>> xs,double r_ref);
+static vector<double> circumcenter(const vector<vector<double>> xs);
+static bool inside_circumtri(const vector<vector<double>> xs, const vector<double> ps);
+void Recursive_tri_delete(Mesh* DT, int hfid);
+static bool Line_cross(const vector<double> &p1, const vector<double> &p2, const vector<double> &p3, const vector<double> &p4);
+static bool Ray_in_triangle(Mesh* DT, int eid, int nid, int vid);
+static double min_angle(const vector<vector<double>> &xs);
+void recursive_delauney_flip(Mesh* DT, int eid, int lid);
+void find_bad_tri_recursive(Mesh* DT, int tri, int *nbad, int vid);
+void find_bad_tri_recursive(Mesh* DT, int tri, int *nbad, int vid, bool* exitf);
+void find_bad_tri(Mesh* DT, int tri, int *nbad, int vid);
+vector<int> facet_reorder(Mesh *DT, int *nsegs);
+static vector<double> find_center(const vector<vector<double>> &xs);
 
-// need stack and push and pop functions
-void push_stack(stack** head, int hfid){
-    stack* new_stack = new stack;
-    new_stack->next = *head;
-    new_stack->hfid = hfid;
-    (*head) = new_stack;
-    return;
-}
-void pop_stack(stack** head){
-    if (*head == NULL){
-        return;
-    }
-    stack* temp = *head;
-    *head = (*head)->next;
-    delete temp;
-    return;
-}
+/// Structure Member functions
 
+/**
+ * @brief Computes AHF array for triangular mesh
+ * 
+ */
 void Mesh::compute_AHF(){
     bool oriented = true;
     bool manifold = true;
@@ -138,44 +112,118 @@ void Mesh::compute_AHF(){
     delete is_index, v2nv, v2he_fid, v2he_leid;
 }
 
-/// subfunctions for delaunay triangulation
-double eval_alpha(const vector<vector<double>> xs,double r_ref);
-static vector<double> circumcenter(const vector<vector<double>> xs);
-static bool inside_circumtri(const vector<vector<double>> xs, const vector<double> ps);
-static bool inside_diametral(Mesh* DT, int hfid, int vid);
-void Recursive_tri_delete(Mesh* DT, int hfid);
-static bool Line_cross(const vector<double> &p1, const vector<double> &p2, const vector<double> &p3, const vector<double> &p4);
-static bool Ray_in_triangle(Mesh* DT, int eid, int nid, int vid);
-static double area_tri(const vector<vector<double>> &xs);
-static double min_angle(const vector<vector<double>> &xs);
-void recursive_delauney_flip(Mesh* DT, int eid, int lid);
-void find_bad_tri_recursive(Mesh* DT, int tri, int *nbad, int vid);
-void find_bad_tri_recursive(Mesh* DT, int tri, int *nbad, int vid, bool* exitf);
-void find_bad_tri(Mesh* DT, int tri, int *nbad, int vid);
-void flip_edge(Mesh* DT, int eid, int lid);
-vector<int> facet_reorder(Mesh *DT, int *nsegs);
-static vector<double> find_center(const vector<vector<double>> &xs);
-void reorder(vector<vector<double>> &xs);
+/**
+ * @brief compute the one ring stencil for the mesh
+ * 
+ * @param maxne max number of elements that can be around each point
+ */
+void Mesh::compute_Onering(int maxne){
+    int nv = coords.size();
+    int* hvids = new int[maxne*nv];
+    vector<int> nv2e;
+    nv2e.assign(nv,0);
+    int size = 0;
 
-vector<bool> find_boundary_nodes(Mesh* DT){
-    int nv = DT->coords.size();
-    vector<bool> bnd(nv);
-    for (int i = 0; i<DT->nelems; i++){
+    int v;
+    for (int i = 0; i<nelems; i++){
         for (int j = 0; j<3; j++){
-            if (DT->sibhfs[i][j] == 0){
-                bnd[DT->elems[i][j]] = true;
-                bnd[DT->elems[i][(j+1)%3]] = true;
-            }
+            v = elems[i][j];
+            hvids[maxne*v+nv2e[v]] = elids2hfid(i+1,j+1);
+            nv2e[v]++;
+            size++;
         }
     }
 
-    return bnd;
+    // putting in structure
+    stl.index.assign(nv+1,0);
+    stl.hvids.assign(size,0);
+    int sz = 0;
+    for (int vid = 0; vid<nv; vid++){
+        for (int i = 0; i<nv2e[vid]; i++){
+            stl.hvids[sz] = hvids[maxne*vid+i];
+            sz++;
+        }
+        stl.index[vid+1] = sz;
+    }
+    delete hvids;
+
+    //printvec(stl.hvids);
+    return;
 }
 
-int find_hfid(Mesh* DT, int eid){
+/**
+ * @brief delete triangles in dele
+ * 
+ */
+void Mesh::delete_tris(){
+    int i,j;
+    int nelems2 = 0;
+    int sz = sibhfs[0].size();
+    vector<int> idx(nelems);
+    vector<int> idx_rev(nelems);
+    fill(idx_rev.begin(), idx_rev.end(),-1);
+
+    // delete triangles to be deleted
+    for (i = 0; i<nelems; i++){
+        if (!delete_elem[i]){
+            elems[nelems2] = elems[i];
+            sibhfs[nelems2] = sibhfs[i];
+            delete_elem[nelems2] = false;
+            idx[nelems2] = i;
+            nelems2++;
+        } else {
+            delete_elem[i] = false;
+        }
+    }
+    nelems = nelems2;
+
+    for (i = 0; i<nelems; i++){
+        idx_rev[idx[i]] = i;
+    }
+
+    int nside;
+    int hfid, eid, lid;
+    for (i = 0; i<nelems2; i++){
+        nside = 0;
+        for (j = 0; j < sz; j++){
+            hfid = sibhfs[i][j];
+            if (!hfid == 0){
+                eid = hfid2eid(hfid);
+                lid = hfid2lid(hfid);
+                if (!delete_elem[eid-1]){
+                    if (idx_rev[eid-1] == -1){
+                        sibhfs[i][j] = 0;
+                    } else {
+                        sibhfs[i][j] = elids2hfid(idx_rev[eid-1]+1,lid);
+                    }
+                } else {
+                    sibhfs[i][j] = 0;
+                }
+                nside++;
+            } else {
+                sibhfs[i][j] = 0;
+            }
+        }
+        if (nside == sz){
+            on_boundary[i] = false;
+        } else {
+            on_boundary[i] = true;
+        }
+        delete_elem[i] = false;
+    }
+    elems.resize(nelems);
+    sibhfs.resize(nelems);
+}
+
+void Mesh::Delaunay_refine(double r_ref){
+    auto f = [r_ref](vector<double> xs){ return r_ref; };
+    Delaunay_refine(f);
+}
+
+int find_hfid(vector<vector<int>> sibhfs, int eid){
     int hfid = 0;
     for (int i = 0; i<3; i++){
-        if(DT->sibhfs[eid][i] == 0){
+        if(sibhfs[eid][i] == 0){
             hfid = elids2hfid(eid+1,i+1);
             return hfid;
         }
@@ -183,32 +231,15 @@ int find_hfid(Mesh* DT, int eid){
     cout << "not found" << endl;
     return hfid;
 }
-/**
- * @brief Refine a delaunay Mesh using Chews second algorithm
- * 
- * @param DT Triangultion data structure
- * @param r_ref radius of circumcircle (double)
- */
-void GeoMesh_refine(Mesh* DT, double r_ref, Spline* spl){
-    auto f = [r_ref](vector<double> xs) {return r_ref; };
-    GeoMesh_refine(DT, f, spl);
-}
-
-/**
- * @brief Refine a delaunay Mesh using Rupperts algorithm
- * 
- * @param DT Triangultion data structure
- * @param r_ref radius of circumcircle (function of position)
- */
-void GeoMesh_refine(Mesh* DT, function<double(vector<double>)> r_ref, Spline* spl){
+void Mesh::Delaunay_refine(function<double(vector<double>)> r_ref){
     // random number generator
     default_random_engine re;
     uniform_real_distribution<double> unif(-1, 1);
 
-    int n,i,nelems;
+    int n,i,nelems2;
     bool exitl;
     double alpha,theta;
-    int nv = (*DT).coords.size();
+    int nv = coords.size();
     vector<vector<double>> ps = Zeros<double>(3,2);
     int tri,eid,lid,ub;
 
@@ -216,28 +247,27 @@ void GeoMesh_refine(Mesh* DT, function<double(vector<double>)> r_ref, Spline* sp
     double total_area = 0.0;
     double minr = 1e6;
     vector<double> mid;
-    for (n=0; n<DT->nelems; n++){
-        ps[0] = (*DT).coords[(*DT).elems[n][0]];
-        ps[1] = (*DT).coords[(*DT).elems[n][1]];
-        ps[2] = (*DT).coords[(*DT).elems[n][2]];
+    for (n=0; n<nelems; n++){
+        ps[0] = coords[elems[n][0]];
+        ps[1] = coords[elems[n][1]];
+        ps[2] = coords[elems[n][2]];
         mid = (ps[0]+ps[1]+ps[2])/3.0;
         total_area += area_tri(ps);
         minr = min(r_ref(mid),minr);
     }
     double area_single = minr*minr/2;
-    ub = DT->elems.size(); 
+    ub = elems.size(); 
     if (1.2*total_area/area_single > ub){
         ub = (int) 1.2*total_area/area_single;
     }
-    cout << ub << " " << total_area << " " << area_single << endl;
-    DT->coords.resize(ub);
-    DT->param.resize(ub);
-    DT->elems.resize(ub);
-    DT->sibhfs.resize(ub);
-    DT->delete_elem.resize(ub);
-    DT->on_boundary.resize(ub);
+    coords.resize(ub);
+    param.resize(ub);
+    elems.resize(ub);
+    sibhfs.resize(ub);
+    delete_elem.resize(ub);
+    on_boundary.resize(ub);
     vector<double> C;
-    nelems = DT->nelems;
+    nelems2 = nelems;
     int* order = new int[ub];
     for (i = 0; i<ub; i++){
         order[i] = i;
@@ -248,12 +278,12 @@ void GeoMesh_refine(Mesh* DT, function<double(vector<double>)> r_ref, Spline* sp
     bool inside_domain;
     int e;
     bool freed = false;
-    while (n<(*DT).nelems){
+    while (n<nelems){
         e = order[n];
-        if (!(*DT).delete_elem[e]){
-            ps[0] = (*DT).coords[(*DT).elems[e][0]];
-            ps[1] = (*DT).coords[(*DT).elems[e][1]];
-            ps[2] = (*DT).coords[(*DT).elems[e][2]];
+        if (!delete_elem[e]){
+            ps[0] = coords[elems[e][0]];
+            ps[1] = coords[elems[e][1]];
+            ps[2] = coords[elems[e][2]];
             C = circumcenter(ps);
             C[0] += 1e-4*unif(re);
             C[1] += 1e-4*unif(re);
@@ -267,27 +297,27 @@ void GeoMesh_refine(Mesh* DT, function<double(vector<double>)> r_ref, Spline* sp
             if (alpha > 1+0.1*double(3*n/(ub))){
 
                 // add circumcircle to Mesh
-                (*DT).coords[nv] = C;
+                coords[nv] = C;
                 tri = e;
-                inside_domain = find_enclosing_tri(DT, &tri, nv);
+                inside_domain = find_enclosing_tri(&tri, C);
                 //cout << alpha << endl;
                 if (!inside_domain){
                     if (tri == -1){
                         cout << "find triangle location failed: deleting point" << endl;
                         nv--;
                     } else {
-                        if (inside_diametral(DT,tri, nv)){
-                            Flip_Insertion_segment(DT, nv, tri, spl);
+                        if (inside_diametral(tri, C)){
+                            Flip_Insertion_segment(nv, tri);
                         } else {
-                            if (DT->on_boundary[e]){
-                                Flip_Insertion_segment(DT, nv, tri, spl);
+                            if (on_boundary[e]){
+                                Flip_Insertion_segment(nv, tri);
                             } else{
-                            if (n == DT->nelems-1 || e == DT->nelems-1){
-                                Flip_Insertion_segment(DT, nv, tri, spl);
+                            if (n == nelems-1 || e == nelems-1){
+                                Flip_Insertion_segment(nv, tri);
                             } else {
                                 nv--;
-                                order[n] = DT->nelems-1;
-                                order[DT->nelems-1] = e;
+                                order[n] = nelems-1;
+                                order[nelems-1] = e;
                                 n--;
                             }
                             }
@@ -295,33 +325,33 @@ void GeoMesh_refine(Mesh* DT, function<double(vector<double>)> r_ref, Spline* sp
                     }
                 } else {
                     bool stop = false;
-                    if (DT->on_boundary[tri]){
-                        int hfid = find_hfid(DT,tri);
-                        if (inside_diametral(DT, hfid, nv)){
-                            Flip_Insertion_segment(DT, nv, hfid, spl);
+                    if (on_boundary[tri]){
+                        int hfid = find_hfid(sibhfs,tri);
+                        if (inside_diametral(hfid, C)){
+                            Flip_Insertion_segment(nv, hfid);
                             stop = true;
                         }
-                    } else if(DT->sibhfs[tri][0] > 0) {
-                        if(DT->on_boundary[hfid2eid(DT->sibhfs[tri][0])-1]){
-                        int hfid = find_hfid(DT,hfid2eid(DT->sibhfs[tri][0])-1);
-                        if (inside_diametral(DT, hfid, nv)){
-                            Flip_Insertion_segment(DT, nv, hfid, spl);
-                            stop = true;
-                        }
-                        }
-                    } else if(DT->sibhfs[tri][1] > 0) {
-                        if(DT->on_boundary[hfid2eid(DT->sibhfs[tri][1])-1]){
-                        int hfid = find_hfid(DT,hfid2eid(DT->sibhfs[tri][1])-1);
-                        if (inside_diametral(DT, hfid, nv)){
-                            Flip_Insertion_segment(DT, nv, hfid, spl);
+                    } else if(sibhfs[tri][0] > 0) {
+                        if(on_boundary[hfid2eid(sibhfs[tri][0])-1]){
+                        int hfid = find_hfid(sibhfs,hfid2eid(sibhfs[tri][0])-1);
+                        if (inside_diametral(hfid, C)){
+                            Flip_Insertion_segment(nv, hfid);
                             stop = true;
                         }
                         }
-                    } else if(DT->sibhfs[tri][2] > 0) {
-                        if(DT->on_boundary[hfid2eid(DT->sibhfs[tri][2])-1]){
-                        int hfid = find_hfid(DT,hfid2eid(DT->sibhfs[tri][2])-1);
-                        if (inside_diametral(DT, hfid, nv)){
-                            Flip_Insertion_segment(DT, nv, hfid, spl);
+                    } else if(sibhfs[tri][1] > 0) {
+                        if(on_boundary[hfid2eid(sibhfs[tri][1])-1]){
+                        int hfid = find_hfid(sibhfs,hfid2eid(sibhfs[tri][1])-1);
+                        if (inside_diametral(hfid, C)){
+                            Flip_Insertion_segment(nv, hfid);
+                            stop = true;
+                        }
+                        }
+                    } else if(sibhfs[tri][2] > 0) {
+                        if(on_boundary[hfid2eid(sibhfs[tri][2])-1]){
+                        int hfid = find_hfid(sibhfs,hfid2eid(sibhfs[tri][2])-1);
+                        if (inside_diametral(hfid, C)){
+                            Flip_Insertion_segment(nv, hfid);
                             stop = true;
                         }
                         }
@@ -330,23 +360,22 @@ void GeoMesh_refine(Mesh* DT, function<double(vector<double>)> r_ref, Spline* sp
 
 
                     if (!stop){
-                        Flip_Insertion(DT,&nv,tri);
+                        Flip_Insertion(&nv,tri);
                     }
                 }
                 nv++;
 
-                if ((double) DT->nelems >= (0.95)*((double) DT->elems.size())){
+                if ((double) nelems >= (0.95)*((double) elems.size())){
                     cout << "approaching size bound, freeing up space" << endl;
                     if (!freed) {
-                        delete_tris(DT,&n);
                         freed = true;
                         ub = ub*1.5;
-                        DT->coords.resize(ub);
-                        DT->param.resize(ub);
-                        DT->elems.resize(ub);
-                        DT->sibhfs.resize(ub);
-                        DT->delete_elem.resize(ub);
-                        DT->on_boundary.resize(ub);
+                        coords.resize(ub);
+                        param.resize(ub);
+                        elems.resize(ub);
+                        sibhfs.resize(ub);
+                        delete_elem.resize(ub);
+                        on_boundary.resize(ub);
                     } else {
                         break;
                     }
@@ -356,10 +385,79 @@ void GeoMesh_refine(Mesh* DT, function<double(vector<double>)> r_ref, Spline* sp
         n++;
     }
     delete order;
-    (*DT).coords.resize(nv);
-    DT->param.resize(nv);
-    delete_tris(DT);
-    cout << "created " << (*DT).nelems-nelems << " triangles from refining the mesh" << endl;
+    coords.resize(nv);
+    param.resize(nv);
+    delete_tris();
+    cout << "created " << nelems-nelems2 << " triangles from refining the mesh" << endl;
+}
+
+
+
+/**
+ * @brief Converts half-facet id to element id
+ * 
+ * @param hfid Half facet id
+ * @return element id
+ */
+int hfid2eid(int hfid){
+    return (hfid >> 8);
+}
+/**
+ * @brief Convert half-facet id to local edge id
+ * 
+ * @param hfid Half facet id
+ * @return local edge id
+ */
+int hfid2lid(int hfid){
+    return (hfid&255) + 1;
+}
+/**
+ * @brief Converts element id and local edge id to half-facet id
+ * 
+ * @param eid element id
+ * @param lid local edge id
+ * @return half-facet id
+ */
+int elids2hfid(int eid, int lid){
+    return ((eid << 8) + lid - 1);
+}
+
+// need stack and push and pop functions
+void push_stack(stack** head, int hfid){
+    stack* new_stack = new stack;
+    new_stack->next = *head;
+    new_stack->hfid = hfid;
+    (*head) = new_stack;
+    return;
+}
+void pop_stack(stack** head){
+    if (*head == NULL){
+        return;
+    }
+    stack* temp = *head;
+    *head = (*head)->next;
+    delete temp;
+    return;
+}
+
+/**
+ * @brief returns a vector of booleans where boundary nodes are true
+ * 
+ * @return vector<bool> 
+ */
+vector<bool> Mesh::find_boundary_nodes(){
+    int nv = coords.size();
+    vector<bool> bnd(nv);
+    for (int i = 0; i<nelems; i++){
+        for (int j = 0; j<3; j++){
+            if (sibhfs[i][j] == 0){
+                bnd[elems[i][j]] = true;
+                bnd[elems[i][(j+1)%3]] = true;
+            }
+        }
+    }
+
+    return bnd;
 }
 
 /**
@@ -369,10 +467,10 @@ void GeoMesh_refine(Mesh* DT, function<double(vector<double>)> r_ref, Spline* sp
  * @param xs Point data (nv -by- 2)
  * @return Constrained delaunay Mesh
  */
-Mesh GeoMesh_Delaunay_Mesh(const vector<vector<int>> &segs, vector<vector<double>> &xs, vector<double> &params){
+Mesh GeoMesh_Delaunay_Mesh(const vector<vector<int>> &segs, vector<vector<double>> &xs){
 
     // segs define boundary segments for the mesh
-    Mesh DT = GeoMesh_Delaunay_Mesh(xs,params);
+    Mesh DT = GeoMesh_Delaunay_Mesh(xs);
     DT.bwork.resize(DT.nelems);
     DT.facets.resize(DT.nelems);
     int nv = xs.size();
@@ -457,7 +555,7 @@ Mesh GeoMesh_Delaunay_Mesh(const vector<vector<int>> &segs, vector<vector<double
             cout << "flipping edge " << eid << " " << lid << " and " << oppeid << " " << opplid << endl;
             cout << "eid " << DT.elems[eid][0] << " " << DT.elems[eid][1] << " " << DT.elems[eid][2] << endl;
             cout << "oppeid " << DT.elems[oppeid][0] << " " << DT.elems[oppeid][1] << " " << DT.elems[oppeid][2] << endl;
-            flip_edge(&DT,eid,lid);
+            DT.flip_edge(eid,lid);
             cout << "after swapping " << endl;
             cout << "eid " << DT.elems[eid][0] << " " << DT.elems[eid][1] << " " << DT.elems[eid][2] << endl;
             cout << "oppeid " << DT.elems[oppeid][0] << " " << DT.elems[oppeid][1] << " " << DT.elems[oppeid][2] << endl;
@@ -474,7 +572,7 @@ Mesh GeoMesh_Delaunay_Mesh(const vector<vector<int>> &segs, vector<vector<double
         }
     }
 
-    delete_tris(&DT);
+    DT.delete_tris();
 
     return DT;
 }
@@ -623,15 +721,15 @@ Mesh GeoMesh_Delaunay_Mesh(vector<vector<double>> &xs){
     for (int n = 0; n < nv; n++){
         vid = order[n];
         tri = DT.nelems-1;
-        inside = find_enclosing_tri(&DT, &tri, vid);
+        inside = DT.find_enclosing_tri(&tri, DT.coords[vid]);
         if (!inside){
             cout << "no enclosing tri found" << endl;
         }
         // inserting node into the Mesh using Bowyer-Watson algorithm
-        Flip_Insertion(&DT,&vid,tri);
-        if ((double) DT.nelems >= (0.8)*((double) ub)){
+        DT.Flip_Insertion(&vid,tri);
+        if ((double) DT.nelems >= (0.9)*((double) ub)){
             cout << "approaching size bound, freeing up space" << endl;
-            delete_tris(&DT);
+            DT.delete_tris();
         }
     }
     delete order;
@@ -644,7 +742,7 @@ Mesh GeoMesh_Delaunay_Mesh(vector<vector<double>> &xs){
         }
     }
 
-    delete_tris(&DT);
+    DT.delete_tris();
     DT.coords.resize(nv);
     for (n=0; n<nv; n++){
         DT.coords[n][0] = xs[n][0];
@@ -657,34 +755,33 @@ Mesh GeoMesh_Delaunay_Mesh(vector<vector<double>> &xs){
 /**
  * @brief Insert node into mesh using Lawson flipping algorithm
  * 
- * @param DT Delaunay Mesh passed by reference
  * @param vid Node to be inserted
  * @param tri_s Triangle that encloses the node
  */
-void Flip_Insertion(Mesh* DT, int* vid, int tri_s){
-    DT->delete_elem[tri_s] = true;
+void Mesh::Flip_Insertion(int* vid, int tri_s){
+    delete_elem[tri_s] = true;
     int hfid,eid,lid;
 
-    vector<int> tri = {DT->elems[tri_s][0], DT->elems[tri_s][1], DT->elems[tri_s][2]};
-    vector<int> sib = {DT->sibhfs[tri_s][0],DT->sibhfs[tri_s][1],DT->sibhfs[tri_s][2]};
+    vector<int> tri = {elems[tri_s][0], elems[tri_s][1], elems[tri_s][2]};
+    vector<int> sib = {sibhfs[tri_s][0],sibhfs[tri_s][1],sibhfs[tri_s][2]};
     
     // splitting triangle and adding subtriangles to the stack if they are not on the boundary
     stack* head = NULL;
-    vector<int> eids = {DT->nelems, DT->nelems+1, DT->nelems+2};
+    vector<int> eids = {nelems, nelems+1, nelems+2};
     for (int i = 0; i<3; i++){
-        DT->elems[eids[i]] = {*vid, tri[i], tri[(i+1)%3]};
+        elems[eids[i]] = {*vid, tri[i], tri[(i+1)%3]};
         hfid = sib[i];
-        DT->sibhfs[eids[i]] = {elids2hfid(eids[(i+2)%3]+1 ,3), hfid, elids2hfid(eids[(i+1)%3]+1,1)};
+        sibhfs[eids[i]] = {elids2hfid(eids[(i+2)%3]+1 ,3), hfid, elids2hfid(eids[(i+1)%3]+1,1)};
         if (hfid2eid(hfid) > 0){
-            DT->sibhfs[hfid2eid(hfid)-1][hfid2lid(hfid)-1] = elids2hfid(eids[i]+1, 2);
+            sibhfs[hfid2eid(hfid)-1][hfid2lid(hfid)-1] = elids2hfid(eids[i]+1, 2);
             push_stack(&head, elids2hfid(eids[i]+1, 2));
-            DT->on_boundary[eids[i]] = false;
+            on_boundary[eids[i]] = false;
         } else {
-            DT->on_boundary[eids[i]] = true;
+            on_boundary[eids[i]] = true;
         }
     }
 
-    DT->nelems+=3;
+    nelems+=3;
     vector<vector<double>> xs = {{0,0},{0,0},{0,0}};
     int oppeid,opplid;
 
@@ -694,20 +791,20 @@ void Flip_Insertion(Mesh* DT, int* vid, int tri_s){
         pop_stack(&head);
         eid = hfid2eid(hfid)-1;
         lid = hfid2lid(hfid)-1;
-        oppeid = hfid2eid(DT->sibhfs[eid][lid])-1;
-        opplid = hfid2lid(DT->sibhfs[eid][lid])-1;
-        xs[0] = DT->coords[DT->elems[oppeid][0]];
-        xs[1] = DT->coords[DT->elems[oppeid][1]];
-        xs[2] = DT->coords[DT->elems[oppeid][2]];
+        oppeid = hfid2eid(sibhfs[eid][lid])-1;
+        opplid = hfid2lid(sibhfs[eid][lid])-1;
+        xs[0] = coords[elems[oppeid][0]];
+        xs[1] = coords[elems[oppeid][1]];
+        xs[2] = coords[elems[oppeid][2]];
         
-        if (inside_circumtri(xs, DT->coords[DT->elems[eid][0]])){
-            flip_edge(DT,eid,1);
+        if (inside_circumtri(xs, coords[elems[eid][0]])){
+            flip_edge(eid,1);
 
-            hfid = DT->sibhfs[oppeid][1];
+            hfid = sibhfs[oppeid][1];
             if (hfid2eid(hfid) > 0){
                 push_stack(&head, elids2hfid(oppeid+1,2));
             }
-            hfid = DT->sibhfs[eid][1];
+            hfid = sibhfs[eid][1];
             if (hfid2eid(hfid) > 0){
                 push_stack(&head, elids2hfid(eid+1,2));
             }
@@ -719,21 +816,20 @@ void Flip_Insertion(Mesh* DT, int* vid, int tri_s){
 /**
  * @brief Insert node into mesh on boundary segment by splitting segment using Lawson flipping algorithm
  * 
- * @param DT Delaunay Mesh passed by reference
  * @param vid Node to be inserted
  * @param hfid Triangle and local edge id of the segment to be split
  */
-void Flip_Insertion_segment(Mesh* DT, int vid, int hfid, Spline* spl){
+void Mesh::Flip_Insertion_segment(int vid, int hfid){
 
     // adding two triangles instead of three
-    int nvS = spl->nv;
+    int nvS = spl.nv;
     stack* head = NULL;
     int eid = hfid2eid(hfid)-1;
     int lid = hfid2lid(hfid)-1;
-    double a = DT->param[DT->elems[eid][lid]];
-    double b = DT->param[DT->elems[eid][(lid+1)%3]];
+    double a = param[elems[eid][lid]];
+    double b = param[elems[eid][(lid+1)%3]];
     if (abs(b-a) < 1e-6 || nvS == 0){
-        DT->coords[vid] = (DT->coords[DT->elems[eid][lid]] + DT->coords[DT->elems[eid][(lid+1)%3]])*0.5;
+        coords[vid] = (coords[elems[eid][lid]] + coords[elems[eid][(lid+1)%3]])*0.5;
     } else {
         if (abs(b-a) > 0.5){
             if (b<a){
@@ -742,27 +838,27 @@ void Flip_Insertion_segment(Mesh* DT, int vid, int hfid, Spline* spl){
                 a +=1;
             }
         }
-        DT->param[vid] = (a+b)/2;
-        DT->coords[vid] = spline_point_segment(spl, DT->param[DT->elems[eid][lid]],  DT->param[DT->elems[eid][(lid+1)%3]], 0.5);
+        param[vid] = (a+b)/2;
+        coords[vid] = spline_point_segment(&spl, param[elems[eid][lid]],  param[elems[eid][(lid+1)%3]], 0.5);
     }
-    double radius = 0.5*(norm(DT->coords[DT->elems[eid][lid]] - DT->coords[DT->elems[eid][(lid+1)%3]]));
-    DT->delete_elem[eid] = true;
-    DT->elems[DT->nelems] = {vid, DT->elems[eid][(lid+2)%3], DT->elems[eid][lid]};
-    DT->sibhfs[DT->nelems] = {elids2hfid(DT->nelems+2,3), DT->sibhfs[eid][(lid+2)%3], 0};
-    DT->elems[DT->nelems+1] = {vid, DT->elems[eid][(lid+1)%3] ,DT->elems[eid][(lid+2)%3]};
-    DT->sibhfs[DT->nelems+1] = {0, DT->sibhfs[eid][(lid+1)%3], elids2hfid(DT->nelems+1,1)};
-    if ( DT->sibhfs[eid][(lid+1)%3] != 0){
-        DT->sibhfs[hfid2eid(DT->sibhfs[eid][(lid+1)%3])-1][hfid2lid(DT->sibhfs[eid][(lid+1)%3])-1] = elids2hfid(DT->nelems+2, 2);
-        push_stack(&head, elids2hfid(DT->nelems+2, 2));
+    double radius = 0.5*(norm(coords[elems[eid][lid]] - coords[elems[eid][(lid+1)%3]]));
+    delete_elem[eid] = true;
+    elems[nelems] = {vid, elems[eid][(lid+2)%3], elems[eid][lid]};
+    sibhfs[nelems] = {elids2hfid(nelems+2,3), sibhfs[eid][(lid+2)%3], 0};
+    elems[nelems+1] = {vid, elems[eid][(lid+1)%3] ,elems[eid][(lid+2)%3]};
+    sibhfs[nelems+1] = {0, sibhfs[eid][(lid+1)%3], elids2hfid(nelems+1,1)};
+    if ( sibhfs[eid][(lid+1)%3] != 0){
+        sibhfs[hfid2eid(sibhfs[eid][(lid+1)%3])-1][hfid2lid(sibhfs[eid][(lid+1)%3])-1] = elids2hfid(nelems+2, 2);
+        push_stack(&head, elids2hfid(nelems+2, 2));
     }
-    if ( DT->sibhfs[eid][(lid+2)%3] != 0){
-        DT->sibhfs[hfid2eid(DT->sibhfs[eid][(lid+2)%3])-1][hfid2lid(DT->sibhfs[eid][(lid+2)%3])-1] = elids2hfid(DT->nelems+1, 2);
-        push_stack(&head, elids2hfid(DT->nelems+1, 2));
+    if ( sibhfs[eid][(lid+2)%3] != 0){
+        sibhfs[hfid2eid(sibhfs[eid][(lid+2)%3])-1][hfid2lid(sibhfs[eid][(lid+2)%3])-1] = elids2hfid(nelems+1, 2);
+        push_stack(&head, elids2hfid(nelems+1, 2));
     }
-    DT->on_boundary[DT->nelems] = true;
-    DT->on_boundary[DT->nelems+1] = true;
+    on_boundary[nelems] = true;
+    on_boundary[nelems+1] = true;
 
-    DT->nelems+=2;
+    nelems+=2;
     vector<vector<double>> xs = {{0,0},{0,0},{0,0}};
     int oppeid,opplid;
 
@@ -772,20 +868,20 @@ void Flip_Insertion_segment(Mesh* DT, int vid, int hfid, Spline* spl){
         pop_stack(&head);
         eid = hfid2eid(hfid)-1;
         lid = hfid2lid(hfid)-1;
-        oppeid = hfid2eid(DT->sibhfs[eid][lid])-1;
-        opplid = hfid2lid(DT->sibhfs[eid][lid])-1;
-        xs[0] = DT->coords[DT->elems[oppeid][0]];
-        xs[1] = DT->coords[DT->elems[oppeid][1]];
-        xs[2] = DT->coords[DT->elems[oppeid][2]];
+        oppeid = hfid2eid(sibhfs[eid][lid])-1;
+        opplid = hfid2lid(sibhfs[eid][lid])-1;
+        xs[0] = coords[elems[oppeid][0]];
+        xs[1] = coords[elems[oppeid][1]];
+        xs[2] = coords[elems[oppeid][2]];
         
-        if (inside_circumtri(xs, DT->coords[DT->elems[eid][0]])){
-            flip_edge(DT,eid,lid);
+        if (inside_circumtri(xs, coords[elems[eid][0]])){
+            flip_edge(eid,lid);
 
-            hfid = DT->sibhfs[oppeid][1];
+            hfid = sibhfs[oppeid][1];
             if (hfid2eid(hfid) > 0){
                 push_stack(&head, elids2hfid(oppeid+1,2));
             }
-            hfid = DT->sibhfs[eid][1];
+            hfid = sibhfs[eid][1];
             if (hfid2eid(hfid) > 0){
                 push_stack(&head, elids2hfid(eid+1,2));
             }
@@ -798,61 +894,60 @@ void Flip_Insertion_segment(Mesh* DT, int vid, int hfid, Spline* spl){
 /**
  * @brief Flip the edge in a Delaunay mesh
  * 
- * @param DT Delaunay Mesh passed by reference
  * @param eid element to be flipped
  * @param lid edge to be flipped across
  */
-void flip_edge(Mesh* DT, int eid, int lid){
+void Mesh::flip_edge(int eid, int lid){
     vector<int> tri1(3);
     vector<int> tri2(3);
     vector<int> sib1(3);
     vector<int> sib2(3);
 
-    int hfid = DT->sibhfs[eid][lid];
+    int hfid = sibhfs[eid][lid];
     int oppeid = hfid2eid(hfid)-1;
     int opplid = hfid2lid(hfid)-1;
 
-    int v1 = DT->elems[eid][(lid+2)%3];
-    int v2 = DT->elems[eid][lid];
-    int v3 = DT->elems[eid][(lid+1)%3];
-    int v4 = DT->elems[oppeid][(opplid+2)%3];
+    int v1 = elems[eid][(lid+2)%3];
+    int v2 = elems[eid][lid];
+    int v3 = elems[eid][(lid+1)%3];
+    int v4 = elems[oppeid][(opplid+2)%3];
 
     tri1 = {v1,v2,v4};
     tri2 = {v1,v4,v3};
-    sib1 = {DT->sibhfs[eid][(lid+2)%3], DT->sibhfs[oppeid][(opplid+1)%3], elids2hfid(oppeid+1,1)};
-    sib2 = {elids2hfid(eid+1,3), DT->sibhfs[oppeid][(opplid+2)%3], DT->sibhfs[eid][(lid+1)%3]};
+    sib1 = {sibhfs[eid][(lid+2)%3], sibhfs[oppeid][(opplid+1)%3], elids2hfid(oppeid+1,1)};
+    sib2 = {elids2hfid(eid+1,3), sibhfs[oppeid][(opplid+2)%3], sibhfs[eid][(lid+1)%3]};
 
-    DT->elems[eid] = tri1;
-    DT->elems[oppeid] = tri2;
-    DT->sibhfs[eid] = sib1;
-    DT->sibhfs[oppeid] = sib2;
+    elems[eid] = tri1;
+    elems[oppeid] = tri2;
+    sibhfs[eid] = sib1;
+    sibhfs[oppeid] = sib2;
     
     bool sib11 = false;
     bool sib12 = false;
     bool sib21 = false;
     bool sib22 = false;
     if (hfid2eid(sib1[0]) > 0){
-        DT->sibhfs[hfid2eid(sib1[0])-1][hfid2lid(sib1[0])-1] = elids2hfid(eid+1,1);
+        sibhfs[hfid2eid(sib1[0])-1][hfid2lid(sib1[0])-1] = elids2hfid(eid+1,1);
     } else {
         sib11 = true;
     }
     if (hfid2eid(sib1[1]) > 0){
-        DT->sibhfs[hfid2eid(sib1[1])-1][hfid2lid(sib1[1])-1] = elids2hfid(eid+1,2);
+        sibhfs[hfid2eid(sib1[1])-1][hfid2lid(sib1[1])-1] = elids2hfid(eid+1,2);
     } else {
         sib12 = true;
     }
     if (hfid2eid(sib2[1]) > 0){
-        DT->sibhfs[hfid2eid(sib2[1])-1][hfid2lid(sib2[1])-1] = elids2hfid(oppeid+1,2);
+        sibhfs[hfid2eid(sib2[1])-1][hfid2lid(sib2[1])-1] = elids2hfid(oppeid+1,2);
     } else {
         sib21 = true;
     }
     if (hfid2eid(sib2[2]) > 0){
-        DT->sibhfs[hfid2eid(sib2[2])-1][hfid2lid(sib2[2])-1] = elids2hfid(oppeid+1,3);
+        sibhfs[hfid2eid(sib2[2])-1][hfid2lid(sib2[2])-1] = elids2hfid(oppeid+1,3);
     } else {
         sib22 = true;
     }
-    DT->on_boundary[eid] = sib11 || sib12;
-    DT->on_boundary[oppeid] = sib21 || sib22;
+    on_boundary[eid] = sib11 || sib12;
+    on_boundary[oppeid] = sib21 || sib22;
 
     return;
 }
@@ -860,13 +955,12 @@ void flip_edge(Mesh* DT, int eid, int lid){
 /**
  * @brief Finding the triangle that encloses a node
  * 
- * @param DT Delaunay Mesh passed by reference
  * @param tri Starting triangle
- * @param vid node query
+ * @param ps vector<double> containing location of the query point
  * @return true 
  * @return false 
  */
-bool find_enclosing_tri(Mesh* DT, int* tri, int vid){
+bool Mesh::find_enclosing_tri(int* tri, vector<double> &ps){
     int v1,v2,v3,i,hfid;
     bool stop;
     int iters = 0;
@@ -874,26 +968,26 @@ bool find_enclosing_tri(Mesh* DT, int* tri, int vid){
     stop = false;
     vector<vector<double>> xs = {{0,0},{0,0},{0,0}};
     while (!stop){
-        v1 = DT->elems[*tri][0];
-        v2 = DT->elems[*tri][1];
-        v3 = DT->elems[*tri][2];
-        if (DT->delete_elem[*tri]){
+        v1 = elems[*tri][0];
+        v2 = elems[*tri][1];
+        v3 = elems[*tri][2];
+        if (delete_elem[*tri]){
             cout << "deleted tri passed ran through in find_enclosing_tri, should not be" << endl;
 
         }
-        xs[0] = DT->coords[v1];
-        xs[1] = DT->coords[v2];
-        xs[2] = DT->coords[v3];
-        if (inside_tri(xs,DT->coords[vid])){
+        xs[0] = coords[v1];
+        xs[1] = coords[v2];
+        xs[2] = coords[v3];
+        if (inside_tri(xs,ps)){
             stop = true;
             return true;
         } else {
-            double AB[2] = {DT->coords[v2][0]-DT->coords[v1][0], DT->coords[v2][1]-DT->coords[v1][1]};
-            double BC[2] = {DT->coords[v3][0]-DT->coords[v2][0], DT->coords[v3][1]-DT->coords[v2][1]};
-            double CA[2] = {DT->coords[v1][0]-DT->coords[v3][0], DT->coords[v1][1]-DT->coords[v3][1]};
-            double AP[2] = {DT->coords[vid][0]-DT->coords[v1][0], DT->coords[vid][1]-DT->coords[v1][1]};
-            double BP[2] = {DT->coords[vid][0]-DT->coords[v2][0], DT->coords[vid][1]-DT->coords[v2][1]};
-            double CP[2] = {DT->coords[vid][0]-DT->coords[v3][0], DT->coords[vid][1]-DT->coords[v3][1]};
+            double AB[2] = {coords[v2][0]-coords[v1][0], coords[v2][1]-coords[v1][1]};
+            double BC[2] = {coords[v3][0]-coords[v2][0], coords[v3][1]-coords[v2][1]};
+            double CA[2] = {coords[v1][0]-coords[v3][0], coords[v1][1]-coords[v3][1]};
+            double AP[2] = {ps[0]-coords[v1][0], ps[1]-coords[v1][1]};
+            double BP[2] = {ps[0]-coords[v2][0], ps[1]-coords[v2][1]};
+            double CP[2] = {ps[0]-coords[v3][0], ps[1]-coords[v3][1]};
             double N1[2] = {AB[1],-AB[0]};
             double N2[2] = {BC[1],-BC[0]};
             double N3[2] = {CA[1],-CA[0]};
@@ -901,7 +995,7 @@ bool find_enclosing_tri(Mesh* DT, int* tri, int vid){
             double S2 = BP[0]*N2[0]+BP[1]*N2[1];
             double S3 = CP[0]*N3[0]+CP[1]*N3[1];
             if ((S1>0)&&(S1>=S2)&&(S1>=S3)){
-                hfid = DT->sibhfs[*tri][0];
+                hfid = sibhfs[*tri][0];
                 if (hfid != 0){
                     *tri = hfid2eid(hfid)-1;
                 } else {
@@ -910,7 +1004,7 @@ bool find_enclosing_tri(Mesh* DT, int* tri, int vid){
                     return false;
                 }
             } else if ((S2>0)&&(S2>=S1)&&(S2>=S3)) {
-                hfid = DT->sibhfs[*tri][1];
+                hfid = sibhfs[*tri][1];
                 if (hfid != 0){
                     *tri = hfid2eid(hfid)-1;
                 } else {
@@ -919,7 +1013,7 @@ bool find_enclosing_tri(Mesh* DT, int* tri, int vid){
                     return false;
                 }
             } else if ((S3>0)&&(S3>=S1)&&(S3>=S2)){
-                hfid = DT->sibhfs[*tri][2];
+                hfid = sibhfs[*tri][2];
                 if (hfid != 0){
                     *tri = hfid2eid(hfid)-1;
                 } else {
@@ -1149,135 +1243,6 @@ void find_bad_tri(Mesh* DT, int tri, int *nbad, int vid){
     }
 }
 
-/**
- * @brief Delete triangles and reorganize data in Mesh DT
- * 
- * @param DT Mesh DT passed by reference
- */
-void delete_tris(Mesh* DT){
-    int i,j;
-    int nelems = 0;
-    int sz = (*DT).sibhfs[0].size();
-    vector<int> idx((*DT).nelems);
-    vector<int> idx_rev((*DT).nelems);
-    fill(idx_rev.begin(), idx_rev.end(),-1);
-
-    // delete triangles to be deleted
-    for (i = 0; i<(*DT).nelems; i++){
-        if (!(*DT).delete_elem[i]){
-            (*DT).elems[nelems] = (*DT).elems[i];
-            (*DT).sibhfs[nelems] = (*DT).sibhfs[i];
-            (*DT).delete_elem[nelems] = false;
-            idx[nelems] = i;
-            nelems++;
-        } else {
-            DT->delete_elem[i] = false;
-        }
-    }
-    (*DT).nelems = nelems;
-
-    for (i = 0; i<(*DT).nelems; i++){
-        idx_rev[idx[i]] = i;
-    }
-
-    int nside;
-    int hfid, eid, lid;
-    for (i = 0; i<nelems; i++){
-        nside = 0;
-        for (j = 0; j < sz; j++){
-            hfid = (*DT).sibhfs[i][j];
-            if (!hfid == 0){
-                eid = hfid2eid(hfid);
-                lid = hfid2lid(hfid);
-                if (!DT->delete_elem[eid-1]){
-                    if (idx_rev[eid-1] == -1){
-                        DT->sibhfs[i][j] = 0;
-                    } else {
-                        (*DT).sibhfs[i][j] = elids2hfid(idx_rev[eid-1]+1,lid);
-                    }
-                } else {
-                    DT->sibhfs[i][j] = 0;
-                }
-                nside++;
-            } else {
-                DT->sibhfs[i][j] = 0;
-            }
-        }
-        if (nside == sz){
-            (*DT).on_boundary[i] = false;
-        } else {
-            (*DT).on_boundary[i] = true;
-        }
-        (*DT).delete_elem[i] = false;
-    }
-    DT->elems.resize(nelems);
-    DT->sibhfs.resize(nelems);
-}
-
-/**
- * @brief Delete triangles and reorganize data in Mesh DT and keep track of specific triangle tri
- * 
- * @param DT Mesh DT passed by reference
- * @param tri triangle pased by reference
- */
-void delete_tris(Mesh* DT, int* tri){
-    int i,j;
-    int nelems = 0;
-    int sz = (*DT).sibhfs[0].size();
-    vector<int> idx((*DT).nelems);
-    vector<int> idx_rev((*DT).nelems);
-
-    // delete triangles to be deleted
-    for (i = 0; i<(*DT).nelems; i++){
-        if (!(*DT).delete_elem[i]){
-            (*DT).elems[nelems] = (*DT).elems[i];
-            (*DT).sibhfs[nelems] = (*DT).sibhfs[i];
-            (*DT).delete_elem[nelems] = false;
-            idx[nelems] = i;
-            nelems++;
-        } else {
-            DT->delete_elem[i] = false;
-        }
-    }
-    (*DT).nelems = nelems;
-
-    for (i = 0; i<(*DT).nelems; i++){
-        idx_rev[idx[i]] = i;
-    }
-
-    int nside;
-    int hfid, eid, lid;
-    for (i = 0; i<nelems; i++){
-        nside = 0;
-        for (j = 0; j < sz; j++){
-            hfid = (*DT).sibhfs[i][j];
-            if (!hfid == 0){
-                eid = hfid2eid(hfid);
-                lid = hfid2lid(hfid);
-                if (!DT->delete_elem[eid-1]){
-                    if (idx_rev[eid-1] == -1){
-                        DT->sibhfs[i][j] = 0;
-                    } else {
-                        (*DT).sibhfs[i][j] = elids2hfid(idx_rev[eid-1]+1,lid);
-                    }
-                } else {
-                    DT->sibhfs[i][j] = 0;
-                }
-                nside++;
-            } else {
-                DT->sibhfs[i][j] = 0;
-            }
-        }
-        if (nside == sz){
-            (*DT).on_boundary[i] = false;
-        } else {
-            (*DT).on_boundary[i] = true;
-        }
-        (*DT).delete_elem[i] = false;
-    }
-    *tri = idx_rev[*tri];
-}
-
 // sub-functions necessary for delaunay
 /// evalute alpha for delaunay refinement
 double eval_alpha(const vector<vector<double>> xs,double r_ref){
@@ -1333,14 +1298,14 @@ static bool inside_circumtri(const vector<vector<double>> xs, const vector<doubl
     return (D);
 }
 /// find whether or not point lies inside diametral circle of line segment
-static bool inside_diametral(Mesh* DT, int hfid, int vid){
+bool Mesh::inside_diametral(int hfid, vector<double> &ps){
     int eid = hfid2eid(hfid) - 1;
     int lid = hfid2lid(hfid) - 1;
-    double v1[2] = {DT->coords[DT->elems[eid][lid]][0],DT->coords[DT->elems[eid][lid]][1]};
-    double v2[2] = {DT->coords[DT->elems[eid][(lid+1)%3]][0],DT->coords[DT->elems[eid][(lid+1)%3]][1]};
+    double v1[2] = {coords[elems[eid][lid]][0],coords[elems[eid][lid]][1]};
+    double v2[2] = {coords[elems[eid][(lid+1)%3]][0],coords[elems[eid][(lid+1)%3]][1]};
     double r = sqrt(pow(v2[0]-v1[0],2) + pow(v2[1]-v1[1],2))/2;
     double p[2] = {(v1[0]+v2[0])/2, (v1[1]+v2[1])/2}; 
-    double dist = sqrt(pow(DT->coords[vid][0]-p[0],2) + pow(DT->coords[vid][1]-p[1],2));
+    double dist = sqrt(pow(ps[0]-p[0],2) + pow(ps[1]-p[1],2));
     return dist < r;
 }
 /// find whether point is inside a triangle
@@ -1474,52 +1439,21 @@ static vector<double> find_center(const vector<vector<double>> &xs){
     return center;
 }
 
-/// reorder pointset by angle
-int myrandom (int i) { return std::rand()%i;}
-void reorder(vector<vector<double>> &xs){
-    srand ( unsigned ( time(0) ) );
-    int nv = xs.size();
-    int ndims = xs[0].size();
-    assert(ndims == 2);
-    vector<double> quantity(nv);
-    random_shuffle(xs.begin(), xs.end(),myrandom);
-    return;
-
-    vector<double> center = find_center(xs);
-
-    // measuring some quantity for each point
-    vector<double> e = {1,0};
-    vector<double> u(ndims);
-    for (int n = 0; n<nv; n++){
-        u[0] = xs[n][0] - center[0];
-        u[1] = xs[n][1] - center[1];
-        quantity[n] = acos(inner(u,e)/norm(u));
-    }
-
-    // basic sorting algo for order points based on some quantity
-    int min_idx; 
-    int j,n;
-    for (n = 0; n<nv-1; n++){
-        min_idx = n;
-        for (j=n+1; j<nv; j++){
-            if (quantity[j] < quantity[min_idx]){
-                min_idx = j;
-            }
-
-            if (min_idx != n){
-                swap(quantity[min_idx],quantity[n]);
-                swap(xs[min_idx],xs[n]);
-            }
-        }
-    }
-}
 /// find area of a triangle
-static double area_tri(const vector<vector<double>> &xs){
-    vector<double> u(2);
-    vector<double> v(2);
+double area_tri(const vector<vector<double>> &xs){
+    int sz = xs[0].size();
+    vector<double> u(sz);
+    vector<double> v(sz);
+    vector<double> N(3);
     u =  xs[1]-xs[0];
     v =  xs[2]-xs[0];
-    return abs(u[0]*v[1] - u[1]*v[0])/2;
+    if (sz == 2){
+        N = {0,0,u[0]*v[1] - u[1]*v[0]};
+    } else {
+        N = {u[1]*v[2] - u[2]*v[1], u[2]*v[0] - u[0]*v[2], u[0]*v[1] - u[1]*v[0]};
+    }
+    
+    return norm(N)/2;
 }
 /// find minimal angle in a triangle
 static double min_angle(const vector<vector<double>> &xs){

@@ -10,13 +10,12 @@ static void Circle_param(double t, double &x, double &y);
 static void Square_param(double t, double &x, double &y);
 static void Harmonic_map(vector<vector<double>> &elemat, vector<vector<double>> &ps);
 static void Convex_Combo_Map(vector<vector<double>> &elemat);
-static double area_tri(const Mat &xs);
 static bool find_enclosing_tri(Mesh* DT,vector<vector<double>> &params, int* tri, vector<double> ps);
 
 void Parametric2Surface(Mesh *Surf, vector<vector<double>> &params, Mesh *msh){
     int nv = msh->coords.size();
     bool use_cubic = Surf->normals.size() > 0;
-    vector<vector<double>> coords_new = Zeros(nv,3);
+    vector<vector<double>> coords_new = Zeros<double>(nv,3);
 
     // main loop
     int tri = 0;
@@ -53,22 +52,22 @@ void Parametric2Surface(Mesh *Surf, vector<vector<double>> &params, Mesh *msh){
                 a300 = xs[0]; a030 = xs[1]; a003 = xs[2];
 
                 w = inner(xs[1]-xs[0],n1);
-                a210 = (2*xs[0] + xs[1] - w*n1)/3;
+                a210 = (2.0*xs[0] + xs[1] - w*n1)/3.0;
                 w = inner(xs[0]-xs[1],n2);
-                a120 = (2*xs[1] + xs[0] - w*n2)/3;
+                a120 = (2.0*xs[1] + xs[0] - w*n2)/3.0;
 
                 w = inner(xs[2]-xs[1],n2);
-                a021 = (2*xs[1] + xs[2] - w*n2)/3;
+                a021 = (2.0*xs[1] + xs[2] - w*n2)/3.0;
                 w = inner(xs[1]-xs[2],n3);
-                a012 = (2*xs[2] + xs[1] - w*n3)/3;
+                a012 = (2.0*xs[2] + xs[1] - w*n3)/3.0;
 
                 w = inner(xs[0]-xs[2],n3);
-                a102 = (2*xs[2] + xs[0] - w*n3)/3;
+                a102 = (2.0*xs[2] + xs[0] - w*n3)/3.0;
                 w = inner(xs[2]-xs[0],n1);
-                a201 = (2*xs[0] + xs[2] - w*n1)/3;
+                a201 = (2.0*xs[0] + xs[2] - w*n1)/3.0;
 
-                E = (a210 + a120 + a021 + a012 + a102 + a201)/6;
-                V = (xs[0] + xs[1] + xs[2])/3;
+                E = (a210 + a120 + a021 + a012 + a102 + a201)/6.0;
+                V = (xs[0] + xs[1] + xs[2])/3.0;
                 a111[0] = E[0] + (E[0]-V[0])/2;
                 a111[1] = E[1] + (E[1]-V[1])/2;
                 a111[2] = E[2] + (E[2]-V[2])/2;
@@ -92,7 +91,7 @@ void Parametric2Surface(Mesh *Surf, vector<vector<double>> &params, Mesh *msh){
 vector<vector<double>> Parametric_Mapping(Mesh* Surf, int domain, int algo){
 
     int nv = Surf->coords.size();
-    vector<vector<double>> params = Zeros(nv,2);
+    vector<vector<double>> params = Zeros<double>(nv,2);
     vector<vector<int>> bdy = find_boundary(Surf, true);
     int nb = bdy.size();
     bool* bdymask = new bool[nv];
@@ -189,7 +188,7 @@ vector<double> Average_nodal_edgelength(Mesh* Surf, vector<vector<double>> &para
 
 void Compute_normals(Mesh* Surf){
     int nv = Surf->coords.size();
-    Surf->normals = Zeros(nv,3);
+    Surf->normals = Zeros<double>(nv,3);
     vector<double> u(3);
     vector<double> v(3);
     vector<double> n(3);
@@ -221,12 +220,12 @@ static void Harmonic_map(vector<vector<double>> &elemat, vector<vector<double>> 
     double x3 = ps[2][0]; double y3 = ps[2][1]; double z3 = ps[2][2];
     double area = area_tri(ps);
     vector<vector<double>> dphi = {{-1,-1},{1,0},{0,1}};
-    vector<vector<double>> M_inv = Zeros(2,2);
+    vector<vector<double>> M_inv = Zeros<double>(2,2);
     M_inv[0][0] = pow(x1-x3,2.0)+pow(y1-y3,2.0)+pow(z1-z3,2.0);
     M_inv[0][1] = -(x1-x2)*(x1-x3)-(y1-y2)*(y1-y3)-(z1-z2)*(z1-z3);
     M_inv[1][0] = -(x1-x2)*(x1-x3)-(y1-y2)*(y1-y3)-(z1-z2)*(z1-z3);
     M_inv[1][1] = pow(x1-x2,2.0)+pow(y1-y2,2.0)+pow(z1-z2,2.0);
-    elemat = dphi*M_inv*Transpose(dphi) / (4*area);
+    elemat = (dphi*M_inv*Transpose(dphi)) * (1/(4*area));
     return;
 }
 
@@ -256,17 +255,6 @@ static void Square_param(double t, double &x, double &y){
     }
     return;
 }
-
-static double area_tri(const Mat &xs){
-    vector<double> u(3);
-    vector<double> v(3);
-    vector<double> n(3);
-    u =  xs[1]-xs[0];
-    v =  xs[2]-xs[0];
-    n = {u[1]*v[2] - u[2]*v[1], u[2]*v[0] - u[0]*v[2] ,u[0]*v[1] - u[1]*v[0]};
-    return sqrt(n[0]*n[0] + n[1]*n[1] + n[2]*n[2])/2;
-}
-
 
 bool find_enclosing_tri(Mesh* DT, vector<vector<double>> &params, int* tri, vector<double> ps){
     int v1,v2,v3,i,hfid;
