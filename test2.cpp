@@ -39,6 +39,7 @@ vector<vector<double>> Flower(int npoints){
 */
 
 int main(){
+    /*
     // loading bunny mesh
     string filename = "data/bunny.obj";
     Mesh bunny = ReadObj_tri(filename);
@@ -67,16 +68,12 @@ int main(){
     cout << "minimum angle: " << check_minangle(&S) << endl;
     WrtieVtk_tri(S);
     cout << "finished writing to file" << endl;
-
+    */
 
     int n = 300;
     vector<vector<double>> xs = Circle(n);
     Spline spl;
     spl.nv = 0; 
-    //xs.push_back({0,0});
-    //xs.push_back({1,0});
-    //xs.push_back({1,1});
-    //xs.push_back({0,1});
     double h = 0.0;
     vector<vector<int>> segs = Zeros<int>(n,2);
     for (int i = 0; i<n; i++){
@@ -95,8 +92,7 @@ int main(){
     check_jacobians(&msh);
     
     
-    Parametric2Surface(&bunny, S.coords, &msh);
     // writing
-    WrtieVtk_tri(msh);
+    WrtieVtk_tri(msh, "test.vtk");
     cout << "finished writing to file" << endl;
 }

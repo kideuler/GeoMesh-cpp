@@ -110,7 +110,6 @@ double Mesh::mesh_smoothing_tri_2d_iter(vector<bool> no_move, double mu, vector<
             iter = 0;
             while (!check_jacobians_node(n,xs_smooth*alpha) && iter<8){
                 alpha = alpha/2;
-                //cout << "naegative jacobian found while trying to move node: " << n << " with alpha: " << alpha << endl;
                 iter++;
             }
             if (iter < 8 && norm(xs_smooth*alpha) < 1){
@@ -140,7 +139,8 @@ double Mesh::mesh_smoothing_tri_2d_iter(vector<bool> no_move, double mu, vector<
     if (Energy_new < Energy_old){
         coords += xs_diff;
     }
-    cout << "Energy old: " << Energy_old << " Energy new: " << Energy_new << endl;
+    Energy = min(Energy_new, Energy_old);
+    cout << "Energy: " << Energy << endl;
     return Energy_new;
 }
 

@@ -10,6 +10,31 @@ static Spline ndegree_spline(const vector<vector<double>> &xs, int degree);
 static Spline Cubic_spline(const vector<vector<double>> &xs);
 static Spline Quadratic_spline(const vector<vector<double>> &xs);
 
+function<double(vector<double>)> create_curvature_hfunction(Spline* spl, int npoints, double theta, double h, double h_min, double hgrad){
+    vector<double> K(npoints), H(npoints);
+    vector<vector<double>> ps = Zeros<double>(npoints,2);
+    for (int i = 0; i<npoints; i++){
+        ps[i] = spline_var(spl, double(i)/double(npoints));
+        K[i] = spline_curvature(spl, double(i)/double(npoints));
+        H[i] = (theta*M_PI/180.0) / K[i];
+        H[i] = min(max(h*h_min, H[i]), h);
+    }
+
+    function<double(vector<double>)> hF = [ps,H,h,hgrad](vector<double> xs){
+        int nv = ps.size();
+        double r,xi,alpha;
+        alpha = 1000;
+        for (int i = 0; i<nv; i++){
+            r = (pow(xs[0]-ps[i][0],2)+pow(xs[1]-ps[i][1],2));
+            xi = r/(hgrad*h);
+            alpha = min((1-min(xi,1.0))*H[i] + h*min(xi,1.0),alpha);
+        }
+        return alpha;
+    };
+    return hF;
+    
+}
+
 vector<double> spline_point_segment(Spline* spl, double a, double b, double ratio){
     double arclength=0.0;
     double q[5] = {-(1/3)*sqrt(5+2*sqrt(10/7)), -(1/3)*sqrt(5-2*sqrt(10/7)),0,(1/3)*sqrt(5-2*sqrt(10/7)),(1/3)*sqrt(5+2*sqrt(10/7))};

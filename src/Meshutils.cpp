@@ -93,14 +93,10 @@ bool check_jacobians(Mesh* DT){
     return false;
 }
 
-void WrtieVtk_tri(const Mesh &msh){
+void WrtieVtk_tri(const Mesh &msh, string filename){
     FILE *fid;
     bool q = msh.elems[0].size() > 3;
-    if (q){
-        fid = fopen("testq.vtk","w");
-    } else {
-        fid = fopen("test.vtk","w");
-    }
+    fid = fopen(filename.c_str(),"w");
     fprintf(fid,"# vtk DataFile Version 3.0\n");
     fprintf(fid,"This file was written using writevtk_unstr.m\n");
     fprintf(fid,"ASCII\n");
@@ -173,9 +169,9 @@ void WrtieVtk_tri(const Mesh &msh){
     delete quads;
 }
 
-void WrtieVtk_tri(const Mesh &msh, const vector<double> &data){
+void WrtieVtk_tri(const Mesh &msh, const vector<double> &data, string filename){
     FILE *fid;
-    fid = fopen("test.vtk","w");
+    fid = fopen(filename.c_str(),"w");
     fprintf(fid,"# vtk DataFile Version 3.0\n");
     fprintf(fid,"This file was written using writevtk_unstr.m\n");
     fprintf(fid,"ASCII\n");

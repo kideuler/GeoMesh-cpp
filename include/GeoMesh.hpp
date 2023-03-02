@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <iostream>
 #include <functional>
+#include <chrono>
 using namespace std;
 
 struct Spline {
@@ -67,6 +68,7 @@ Spline spline_init(const vector<vector<double>> &xs, int degree = 3);
 vector<double> spline_var(Spline* spl, double t, int order=0);
 double spline_curvature(Spline* spl, double t);
 vector<double> spline_point_segment(Spline* spl, double a, double b, double ratio);
+function<double(vector<double>)> create_curvature_hfunction(Spline* spl, int npoints, double theta, double h, double h_min, double hgrad);
 
 // delaunay Mesh functions 2d
 Mesh GeoMesh_Delaunay_Mesh(vector<vector<double>> &xs, vector<double> &params);
@@ -80,8 +82,8 @@ bool inside_tri(const vector<vector<double>> &xs, const vector<double> &ps);
 
 // Meshutils functions
 vector<vector<int>> find_boundary(Mesh* msh, bool findloop);
-void WrtieVtk_tri(const Mesh &msh);
-void WrtieVtk_tri(const Mesh &msh, const vector<double> &data);
+void WrtieVtk_tri(const Mesh &msh, string filname);
+void WrtieVtk_tri(const Mesh &msh, const vector<double> &data, string filename);
 Mesh ReadObj_tri(string filename);
 bool check_sibhfs(Mesh* DT);
 bool check_jacobians(Mesh* DT);

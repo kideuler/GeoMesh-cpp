@@ -1,22 +1,42 @@
 CC = g++
 CFLAGS = -I -Isrc  -Iinclude -Iextern/eigen
-DEPS = src/Meshgen2d.cpp src/Meshutils.cpp src/GeoSpline.cpp src/MeshSmooth.cpp src/MeshSurface.cpp
+DEPS = src/*.cpp
 DEPS_O = Meshgen2d.o Meshutils.o GeoSpline.o MeshSmooth.o MeshSurface.o
 OBJ = test
+OBJDIR = bin
 
 make:
-	$(CC) $(CFLAGS) -c -g  $(DEPS)
+	$(CC) $(CFLAGS) -c -O3  $(DEPS)
 
 .PHONY: clean
 clean:
 	rm -rf *.o
 
-.PHONY: opt
+.PHONY: debug
 opt:
-	$(CC) $(CFLAGS) -c -O3 $(DEPS)
+	$(CC) $(CFLAGS) -c -g -Wall -Wextra $(DEPS)
 
-.PHONY: run
-run:
-	$(CC) $(CFLAGS)  -g test2.cpp $(DEPS_O) -o $(OBJ)
-	./$(OBJ)
-	sudo cp test.vtk /mnt/c/Users/Jacob/Documents/test.vtk
+# test 1
+.PHONY: 1
+1:
+	$(CC) $(CFLAGS)  -g test.cpp $(DEPS_O) -o $(OBJ)
+	./$(OBJ) 1
+	sudo cp test1.vtk /mnt/c/Users/Jacob/Documents/test1.vtk
+# test 2
+.PHONY: 2
+2:
+	$(CC) $(CFLAGS)  -g test.cpp $(DEPS_O) -o $(OBJ)
+	./$(OBJ) 2
+	sudo cp test2.vtk /mnt/c/Users/Jacob/Documents/test2.vtk
+# test 3
+.PHONY: 3
+3:
+	$(CC) $(CFLAGS)  -g test.cpp $(DEPS_O) -o $(OBJ)
+	./$(OBJ) 3
+	sudo cp test3.vtk /mnt/c/Users/Jacob/Documents/test3.vtk
+# test 4
+.PHONY: 4
+4:
+	$(CC) $(CFLAGS)  -g test.cpp $(DEPS_O) -o $(OBJ)
+	./$(OBJ) 4
+	sudo cp test4.vtk /mnt/c/Users/Jacob/Documents/test4.vtk
