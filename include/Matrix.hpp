@@ -140,6 +140,21 @@ vector<vector<T>> operator*(const vector<vector<T>> &A, T a){
     }
     return prod;
 }
+// matrix scalar division
+template <typename T>
+vector<vector<T>> operator/(const vector<vector<T>> &A, T a){
+    int m = A.size();
+    int n = A[0].size();
+
+    vector<vector<T>> prod;
+    prod.assign(m, vector<T>(n, 0));
+    for(int i=0; i<m; i++){
+        for(int j=0; j<n;j++){
+            prod[i][j] = A[i][j]/a;
+        }
+    }
+    return prod;
+}
 
 /// Vector operators
 

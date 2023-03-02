@@ -95,6 +95,61 @@ bool check_jacobians(Mesh* DT){
 
 void WrtieVtk_tri(const Mesh &msh, string filename){
     FILE *fid;
+    fid = fopen(filename.c_str(),"w");
+    fprintf(fid,"# vtk DataFile Version 3.0\n");
+    fprintf(fid,"This file was written using writevtk_unstr.m\n");
+    fprintf(fid,"ASCII\n");
+
+    int nv = msh.coords.size();
+    int ndims = msh.coords[0].size();
+    int nelems = msh.elems.size();
+    int nelem_coeff, cell_type;
+    bool is_quadratic = msh.degree==2;
+    if (is_quadratic){
+        nelem_coeff = 7;
+        cell_type = 22;
+    } else {
+        nelem_coeff = 4;
+        cell_type = 5;
+    }
+
+    // header for points
+    fprintf(fid, "DATASET UNSTRUCTURED_GRID\n");
+    fprintf(fid, "POINTS %i double",nv);
+
+    // write out vertices
+    if (ndims == 2){
+        for (int i=0; i<nv;i++){
+            fprintf(fid,"\n%g %g %g",msh.coords[i][0],msh.coords[i][1],0.0);
+        }
+    } else {
+        for (int i=0; i<nv;i++){
+            fprintf(fid,"\n%g %g %g",msh.coords[i][0],msh.coords[i][1],msh.coords[i][2]);
+        }
+    }
+
+    // write out connectivity header
+    fprintf(fid,"\n\nCELLS %i %i", nelems, nelem_coeff*nelems);
+    if (is_quadratic){
+        for (int i = 0; i<nelems; i++){
+            fprintf(fid,"\n%d %d %d %d %d %d %d",6,msh.elems[i][0],msh.elems[i][1],msh.elems[i][2],msh.elems[i][3],msh.elems[i][4],msh.elems[i][5]);
+        }
+    } else {
+        for (int i = 0; i<nelems; i++){
+            fprintf(fid,"\n%d %d %d %d",3,msh.elems[i][0],msh.elems[i][1],msh.elems[i][2]);
+        }
+    }
+
+    // write out cell types
+    fprintf(fid, "\n\nCELL_TYPES %i", nelems);
+    for (int i = 0; i<nelems; i++){
+        fprintf(fid,"\n%i",cell_type);
+    }
+    fclose(fid);
+}
+
+void WrtieVtk_mixed(const Mesh &msh, string filename){
+    FILE *fid;
     bool q = msh.elems[0].size() > 3;
     fid = fopen(filename.c_str(),"w");
     fprintf(fid,"# vtk DataFile Version 3.0\n");
@@ -177,9 +232,17 @@ void WrtieVtk_tri(const Mesh &msh, const vector<double> &data, string filename){
     fprintf(fid,"ASCII\n");
 
     int nv = msh.coords.size();
-    assert(nv == data.size());
     int ndims = msh.coords[0].size();
     int nelems = msh.elems.size();
+    int nelem_coeff, cell_type;
+    bool is_quadratic = msh.degree==2;
+    if (is_quadratic){
+        nelem_coeff = 7;
+        cell_type = 22;
+    } else {
+        nelem_coeff = 4;
+        cell_type = 5;
+    }
 
     // header for points
     fprintf(fid, "DATASET UNSTRUCTURED_GRID\n");
@@ -197,15 +260,21 @@ void WrtieVtk_tri(const Mesh &msh, const vector<double> &data, string filename){
     }
 
     // write out connectivity header
-    fprintf(fid,"\n\nCELLS %i %i", nelems, 4*nelems);
-    for (int i = 0; i<nelems; i++){
-        fprintf(fid,"\n%d %d %d %d",3,msh.elems[i][0],msh.elems[i][1],msh.elems[i][2]);
+    fprintf(fid,"\n\nCELLS %i %i", nelems, nelem_coeff*nelems);
+    if (is_quadratic){
+        for (int i = 0; i<nelems; i++){
+            fprintf(fid,"\n%d %d %d %d %d %d %d",6,msh.elems[i][0],msh.elems[i][1],msh.elems[i][2],msh.elems[i][3],msh.elems[i][4],msh.elems[i][5]);
+        }
+    } else {
+        for (int i = 0; i<nelems; i++){
+            fprintf(fid,"\n%d %d %d %d",3,msh.elems[i][0],msh.elems[i][1],msh.elems[i][2]);
+        }
     }
 
     // write out cell types
     fprintf(fid, "\n\nCELL_TYPES %i", nelems);
     for (int i = 0; i<nelems; i++){
-        fprintf(fid,"\n%i",5);
+        fprintf(fid,"\n%i",cell_type);
     }
 
     fprintf(fid, "\n\nPOINT_DATA %i",nv);

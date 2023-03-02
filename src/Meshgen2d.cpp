@@ -113,6 +113,58 @@ void Mesh::compute_AHF(){
 }
 
 /**
+ * @brief raises linear mesh to quadratic mesh
+ * 
+ */
+void Mesh::make_quadratic(){
+    assert(degree == 1);
+    vector<vector<int>> facets = obtain_trifacets(2);
+    int nv = coords.size();
+    if (spl.nv > 0){
+        assert(param.size() == nv);
+    }
+    coords.resize(10*nv);
+    param.resize(10*nv);
+
+    // making space in elems
+    int ii,jj;
+    for (ii = 0; ii<nelems; ii++){
+        elems[ii].resize(6);
+    }
+    
+    int eid, lid;
+    double a,b;
+    for (ii = 0; ii<nelems; ii++){
+        for (jj = 0; jj<3; jj++){
+            eid = hfid2eid(sibhfs[ii][jj])-1;
+            lid = hfid2lid(sibhfs[ii][jj])-1;
+            if (eid < 0){ // boundary facet
+                elems[ii][facets[jj][2]] = nv;
+                a = param[elems[ii][facets[jj][0]]];
+                b = param[elems[ii][facets[jj][1]]];
+                if (spl.nv > 0 && abs(a-b)>1e-6){
+                    param[nv] = (a+b)/2;
+                    coords[nv] = spline_point_segment(&spl, a, b, 0.5);
+                } else {
+                    coords[nv] = (coords[elems[ii][facets[jj][0]]] + coords[elems[ii][facets[jj][1]]])/2.0;
+                }
+                nv++;
+            } else { // interior facet
+                if (elems[ii][facets[jj][2]] == 0){ // if not used
+                    elems[ii][facets[jj][2]] = nv;
+                    elems[eid][facets[lid][2]] = nv;
+                    coords[nv] = (coords[elems[ii][facets[jj][0]]] + coords[elems[ii][facets[jj][1]]])/2.0;
+                    nv++;
+                }
+            }
+        }
+    }
+    degree = 2;
+    coords.resize(nv);
+    param.resize(nv);
+}
+
+/**
  * @brief compute the one ring stencil for the mesh
  * 
  * @param maxne max number of elements that can be around each point
@@ -447,17 +499,54 @@ void pop_stack(stack** head){
  */
 vector<bool> Mesh::find_boundary_nodes(){
     int nv = coords.size();
-    vector<bool> bnd(nv);
+    vector<vector<int>> facets = obtain_trifacets(degree);
+    int nnodesf = facets[0].size();
+    vector<bool> bnd;
+    bnd.assign(nv,false);
     for (int i = 0; i<nelems; i++){
         for (int j = 0; j<3; j++){
             if (sibhfs[i][j] == 0){
-                bnd[elems[i][j]] = true;
-                bnd[elems[i][(j+1)%3]] = true;
+                for (int k = 0; k<nnodesf; k++){
+                    bnd[elems[i][facets[j][k]]] = true;
+                }
             }
         }
     }
 
     return bnd;
+}
+
+/**
+ * @brief returns a vector of int of boundary nodes
+ * 
+ * @return vector<int> 
+ */
+vector<int> Mesh::boundary_nodes(){
+    int nv = coords.size();
+    vector<vector<int>> facets = obtain_trifacets(degree);
+    int nnodesf = facets[0].size();
+    vector<bool> bnd;
+    bnd.assign(nv,false);
+    vector<int> bdy;
+    bdy.reserve(nv);
+    int count=0;
+    int v;
+    for (int i = 0; i<nelems; i++){
+        for (int j = 0; j<3; j++){
+            if (sibhfs[i][j] == 0){
+                for (int k = 0; k<nnodesf; k++){
+                    v = elems[i][facets[j][k]];
+                    if (!bnd[v]){
+                        bnd[v] = true;
+                        bdy.push_back(v);
+                        count++;
+                    }
+                }
+            }
+        }
+    }
+
+    return bdy;
 }
 
 /**
@@ -749,6 +838,7 @@ Mesh GeoMesh_Delaunay_Mesh(vector<vector<double>> &xs){
         DT.coords[n][1] = xs[n][1];
     }
     cout << "created " << DT.nelems << " triangles from initial points" << endl;
+    DT.degree = 1;
     return DT;
 }
 
@@ -1480,4 +1570,25 @@ double check_minangle(Mesh* DT){
         theta = min(theta, min_angle(ps));
     }
     return theta;
+}
+
+/// facet nodes for high order triangular meshes
+vector<vector<int>> obtain_trifacets(int degree){
+    vector<vector<int>> facets = Zeros<int>(3,degree+1);
+    facets[0][0] = 0;
+    facets[0][1] = 1;
+    facets[1][0] = 1;
+    facets[1][1] = 2;
+    facets[2][0] = 2;
+    facets[2][1] = 0;
+    if (degree > 1){
+        int kk = 3;
+        for (int i = 0; i<3; i++){
+            for (int j = 2; j<2+degree-1; j++){
+                facets[i][j] = kk;
+                kk++;
+            }
+        }
+    }
+    return facets;
 }

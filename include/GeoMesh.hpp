@@ -29,6 +29,7 @@ struct Mesh {
     vector<vector<int>> elems;
     vector<vector<int>> sibhfs;
     int nelems;
+    int degree;
     vector<vector<int>> facets;
     vector<bool> delete_elem;
     vector<int> badtris;
@@ -40,6 +41,7 @@ struct Mesh {
 
     // major member functions
     void compute_AHF();
+    void make_quadratic();
     void compute_Onering(int maxne = 10);
     void Delaunay_refine(function<double(vector<double>)> r_ref);
     void Delaunay_refine(double r_ref);
@@ -49,6 +51,7 @@ struct Mesh {
     // minor utility functions
     void delete_tris();
     vector<bool> find_boundary_nodes();
+    vector<int> boundary_nodes();
     bool find_enclosing_tri(int *starting_tri, vector<double> &ps);
     void Flip_Insertion(int* vid, int starting_tri);
     void Flip_Insertion_segment(int vid, int hfid);
@@ -56,6 +59,9 @@ struct Mesh {
     bool inside_diametral(int hfid, vector<double> &ps);
     bool check_jacobians_node(int vid, vector<double> dir = {0.0,0.0});
 };
+
+// Finite element functions
+vector<double> Poisson_2d(Mesh* msh, vector<double> &frhs, double kappa, vector<int> &bndnodes, vector<double> &dvals);
 
 // Surface remeshing
 void Parametric2Surface(Mesh *Surf, vector<vector<double>> &params, Mesh *msh);
@@ -77,7 +83,7 @@ Mesh GeoMesh_Delaunay_Mesh(vector<vector<double>> &xs);
 void Bowyer_watson2d(Mesh* DT, int vid, int tri_s,bool refine);
 double check_minangle(Mesh* DT);
 double area_tri(const vector<vector<double>> &xs);
-vector<bool> find_boundary_nodes(Mesh* DT);
+vector<vector<int>> obtain_trifacets(int degree);
 bool inside_tri(const vector<vector<double>> &xs, const vector<double> &ps);
 
 // Meshutils functions

@@ -1,20 +1,20 @@
 CC = g++
 CFLAGS = -I -Isrc  -Iinclude -Iextern/eigen
 DEPS = src/*.cpp
-DEPS_O = Meshgen2d.o Meshutils.o GeoSpline.o MeshSmooth.o MeshSurface.o
+DEPS_O = Meshgen2d.o Meshutils.o GeoSpline.o MeshSmooth.o MeshSurface.o FEM.o
 OBJ = test
 OBJDIR = bin
 
 make:
-	$(CC) $(CFLAGS) -c -O3  $(DEPS)
+	$(CC) $(CFLAGS) -c -O3 $(DEPS)
 
 .PHONY: clean
 clean:
 	rm -rf *.o
 
 .PHONY: debug
-opt:
-	$(CC) $(CFLAGS) -c -g -Wall -Wextra $(DEPS)
+debug:
+	$(CC) $(CFLAGS) -c -g $(DEPS)
 
 # test 1
 .PHONY: 1
