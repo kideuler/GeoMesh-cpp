@@ -165,6 +165,33 @@ void Mesh::make_quadratic(){
 }
 
 /**
+ * @brief decompose quadratic mesh to linear
+ * 
+ */
+void Mesh::decompose_to_linear(){
+    if (degree == 1){
+        return;
+    }
+    vector<vector<int>> elems_new = Zeros<int>(degree*degree*nelems,3);
+    vector<vector<int>> ho2lin = {{0,3,5},{3,1,4},{5,4,2},{3,4,5}};
+
+    int kk = 0;
+    for (int ii = 0; ii<nelems; ii++){
+        for (int jj = 0; jj<degree*degree; jj++){
+            elems_new[kk][0] = elems[ii][ho2lin[jj][0]];
+            elems_new[kk][1] = elems[ii][ho2lin[jj][1]];
+            elems_new[kk][2] = elems[ii][ho2lin[jj][2]];
+            kk++;
+        }
+    }
+
+    nelems = elems_new.size();
+    elems = elems_new;
+    degree = 1;
+    compute_AHF();
+}
+
+/**
  * @brief compute the one ring stencil for the mesh
  * 
  * @param maxne max number of elements that can be around each point
@@ -545,7 +572,7 @@ vector<int> Mesh::boundary_nodes(){
             }
         }
     }
-
+    bdy.resize(count);
     return bdy;
 }
 

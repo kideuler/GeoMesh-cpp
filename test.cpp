@@ -188,7 +188,7 @@ int main(int argc, char *argv[]){
         double P1_error = norm(error)/norm(u);
         cout << "l2 relative error from Linear mesh: " << P1_error << endl;
         cout << "l_inf relative error from Linear mesh: " << maxE << endl << endl;
-
+        
         cout << "Performing FEM with P2 elements" << endl;
         msh.make_quadratic();
         nv = msh.coords.size();
@@ -205,6 +205,20 @@ int main(int argc, char *argv[]){
         double P2_error = norm(error)/norm(u);
         cout << "l2 relative error from Quadratic mesh: " << P2_error << endl;
         cout << "l_inf relative error from Linear mesh: " << maxE << endl << endl;
+
+        cout << "Performing FEM with refined P1 elements" << endl;
+        msh.decompose_to_linear();
+        bndnodes = msh.boundary_nodes(); // finding boundary nodes
+        nbnd = bndnodes.size();
+        dvals.resize(nbnd);
+        for (int n = 0; n<nbnd; n++) {dvals[n] = u[bndnodes[n]];}
+        u_h = Poisson_2d(&msh, frhs, kappa, bndnodes, dvals);
+        error.resize(nv);
+        maxE = 0.0;
+        for (int n = 0; n<nv; n++) {error[n] = abs(u[n]-u_h[n]); if(error[n]>maxE){maxE=error[n];}}
+        double P1r_error = norm(error)/norm(u);
+        cout << "l2 relative error from refined Linear mesh: " << P1r_error << endl;
+        cout << "l_inf relative error from refined Linear mesh: " << maxE << endl << endl;
 
         // writing
         WrtieVtk_tri(msh, error, "test1.vtk");
@@ -315,74 +329,22 @@ int main(int argc, char *argv[]){
         cout << "l2 relative error from Quadratic mesh: " << P2_error << endl;
         cout << "l_inf absolute error from Quadratic mesh: " << maxE << endl << endl;
 
+        cout << "Performing FEM with refined P1 elements" << endl;
+        msh.decompose_to_linear();
+        bndnodes = msh.boundary_nodes(); // finding boundary nodes
+        nbnd = bndnodes.size();
+        dvals.resize(nbnd);
+        for (int n = 0; n<nbnd; n++) {dvals[n] = u[bndnodes[n]];}
+        u_h = Poisson_2d(&msh, frhs, kappa, bndnodes, dvals);
+        error.resize(nv);
+        maxE = 0.0;
+        for (int n = 0; n<nv; n++) {error[n] = abs(u[n]-u_h[n]); if(error[n]>maxE){maxE=error[n];}}
+        double P1r_error = norm(error)/norm(u);
+        cout << "l2 relative error from refined Linear mesh: " << P1r_error << endl;
+        cout << "l_inf relative error from refined Linear mesh: " << maxE << endl << endl;
+
         // writing
-        WrtieVtk_tri(msh, u_h, "test2.vtk");
+        WrtieVtk_tri(msh, error, "test2.vtk");
         cout << "finished writing to file" << endl;
     }
-
-    /*
-    // compute average mesh density for a uniform surface mesh distribution
-    vector<double> hnode = Average_nodal_edgelength(&bunny, P);
-    // spline setup
-    vector<vector<double>> sps = Circle(100);
-    auto start = chrono::high_resolution_clock::now();
-    Spline spl = spline_init(sps,3);
-    auto stop = chrono::high_resolution_clock::now();
-    auto duration = chrono::duration_cast<chrono::microseconds>(stop - start);
-    cout << "created Spline in " << duration.count()/1e6 << " seconds" << endl;
-    int n = 500;
-    vector<vector<double>> xs  = Zeros<double>(n,2);
-    vector<double> param(n);
-    for (int i=0; i<n; i++){
-        param[i] = double(i)/double(n);
-        xs[i] = spline_var(&spl, param[i]);
-    }
-    
-    int kk = 251;
-    vector<vector<double>> ps = Star(kk);
-    vector<double> K(kk);
-    for (int i=0; i<ps.size(); i++){
-        double p = double(i)/double(kk);
-        //K[i] = spline_curvature(&spl, p);
-    }
-    
-    vector<vector<int>> segs = Zeros<int>(n,2);
-    double h = 0.0;
-    for (int i = 0; i<n; i++){
-        segs[i][0] = i;
-        segs[i][1] = (i+1)%n;
-        h = h + norm(xs[(i+1)%n]-xs[i]);
-    }
-    h = 1*(sqrt(3)/3)*(h/(double(n)-1));
-    hnode = hnode/h;
-    for (int i = 0; i<hnode.size(); i++) { hnode[i] =  max(0.02, hnode[i]);}
-    function<double(vector<double>)> H = create_grad(P, h, hnode, 0.001);
-    // initial Mesh
-    start = chrono::high_resolution_clock::now();
-    Mesh DT = GeoComp_Delaunay_Mesh(xs);
-    stop = chrono::high_resolution_clock::now();
-    duration = chrono::duration_cast<chrono::microseconds>(stop - start);
-    cout << "finished initial Mesh in " << duration.count()/1e6 << " seconds" << endl;
-    // refinement
-    Spline S;
-    start = chrono::high_resolution_clock::now();
-    GeoComp_refine(&DT, h, &spl);
-    stop = chrono::high_resolution_clock::now();
-    duration = chrono::duration_cast<chrono::microseconds>(stop - start);
-    cout << "finished delaunay refinement in " << duration.count()/1e6 << " seconds" << endl;
-    cout << "minimum angle: " << check_minangle(&DT) << endl;
-    vector<bool> bnd = find_boundary_nodes(&DT);
-    // smoothing
-    start = chrono::high_resolution_clock::now();
-    mesh_smoothing_2d(&DT, bnd, H, 0);
-    stop = chrono::high_resolution_clock::now();
-    duration = chrono::duration_cast<chrono::microseconds>(stop - start);
-    cout << "finished mesh smoothing in " << duration.count()/1e6 << " seconds" << endl;
-    cout << "minimum angle: " << check_minangle(&DT) << endl;
-    // surface remeshing
-    Parametric2Surface(&bunny, P, &DT);
-    // writing
-    WrtieVtk_tri(DT);
-    cout << "finished writing to file" << endl;
-    */
 }
