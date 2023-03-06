@@ -324,21 +324,20 @@ void Mesh::Delaunay_refine(function<double(vector<double>)> r_ref){
 
     // finding total area and estimate to define maximum size bounds
     double total_area = 0.0;
-    double minr = 1e6;
     vector<double> mid;
+    double minr = r_ref(mid);
     for (n=0; n<nelems; n++){
         ps[0] = coords[elems[n][0]];
         ps[1] = coords[elems[n][1]];
         ps[2] = coords[elems[n][2]];
-        mid = (ps[0]+ps[1]+ps[2])/3.0;
         total_area += area_tri(ps);
-        minr = min(r_ref(mid),minr);
     }
-    double area_single = minr*minr/2;
+    double area_single = max(minr*minr/2,1e-6);
     ub = elems.size(); 
     if (1.2*total_area/area_single > ub){
         ub = (int) 1.2*total_area/area_single;
     }
+    ub = min(ub,1000000);
     coords.resize(ub);
     param.resize(ub);
     elems.resize(ub);
@@ -347,7 +346,7 @@ void Mesh::Delaunay_refine(function<double(vector<double>)> r_ref){
     on_boundary.resize(ub);
     vector<double> C;
     nelems2 = nelems;
-    int* order = new int[ub];
+    vector<int> order(ub);
     for (i = 0; i<ub; i++){
         order[i] = i;
     }
@@ -446,30 +445,24 @@ void Mesh::Delaunay_refine(function<double(vector<double>)> r_ref){
 
                 if ((double) nelems >= (0.95)*((double) elems.size())){
                     cout << "approaching size bound, freeing up space" << endl;
-                    if (!freed) {
-                        freed = true;
-                        ub = ub*1.5;
-                        coords.resize(ub);
-                        param.resize(ub);
-                        elems.resize(ub);
-                        sibhfs.resize(ub);
-                        delete_elem.resize(ub);
-                        on_boundary.resize(ub);
-                    } else {
-                        break;
-                    }
+                    ub = ub*2;
+                    coords.resize(ub);
+                    param.resize(ub);
+                    elems.resize(ub);
+                    sibhfs.resize(ub);
+                    delete_elem.resize(ub);
+                    on_boundary.resize(ub);
+                    order.resize(ub);
                 }
             }
         }
         n++;
     }
-    delete order;
     coords.resize(nv);
     param.resize(nv);
     delete_tris();
     cout << "created " << nelems-nelems2 << " triangles from refining the mesh" << endl;
 }
-
 
 
 /**

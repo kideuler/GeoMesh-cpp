@@ -22,6 +22,9 @@ function<double(vector<double>)> create_curvature_hfunction(Spline* spl, int npo
 
     function<double(vector<double>)> hF = [ps,H,h,hgrad](vector<double> xs){
         int nv = ps.size();
+        if (xs.size() == 0){
+            return mean(H);
+        }
         double r,xi,alpha;
         alpha = 1000;
         for (int i = 0; i<nv; i++){

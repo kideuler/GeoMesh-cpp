@@ -11,6 +11,7 @@ static void Square_param(double t, double &x, double &y);
 static void Harmonic_map(vector<vector<double>> &elemat, vector<vector<double>> &ps);
 static void Convex_Combo_Map(vector<vector<double>> &elemat);
 static bool find_enclosing_tri(Mesh* DT,vector<vector<double>> &params, int* tri, vector<double> ps);
+void apply_dbc(SpMat &A, Eigen::VectorXd &bx,Eigen::VectorXd &by, vector<int> &bndnodes, vector<double> &dvalsx, vector<double> &dvalsy, vector<bool> &is_dir);
 
 void Parametric2Surface(Mesh *Surf, vector<vector<double>> &params, Mesh *msh){
     int nv = msh->coords.size();
@@ -94,19 +95,18 @@ vector<vector<double>> Parametric_Mapping(Mesh* Surf, int domain, int algo){
     vector<vector<double>> params = Zeros<double>(nv,2);
     vector<vector<int>> bdy = find_boundary(Surf, true);
     int nb = bdy.size();
-    bool* bdymask = new bool[nv];
-    for(int i = 0; i<nv; i++){ bdymask[i]=false; }
-    for(int i = 0; i<nb; i++){ bdymask[bdy[i][0]] = true; bdymask[bdy[i][1]] = true; }
+    vector<int> bndnodes(nb);
 
     Eigen::SparseLU<Eigen::SparseMatrix<double>, Eigen::COLAMDOrdering<int> >   solver;
-    //Eigen::ConjugateGradient<Eigen::SparseMatrix<double> > solver;
-    //Eigen::SimplicialLDLT<Eigen::SparseMatrix<double>, Eigen::Upper|Eigen::Lower, Eigen::COLAMDOrdering<int> >   solver;
     SpMat A(nv,nv);
     A.reserve(Eigen::VectorXi::Constant(nv,10));
     Eigen::VectorXd bx(nv), by(nv), u(nv), v(nv);
 
     int vn;
     double t,x,y;
+    vector<bool> is_dir = Surf->find_boundary_nodes();
+    vector<double> dvalsx(nb);
+    vector<double> dvalsy(nb);
     for(int i = 0; i<nb; i++){
         vn = bdy[i][0];
         t = (((double) i) / ((double) nb));
@@ -115,12 +115,11 @@ vector<vector<double>> Parametric_Mapping(Mesh* Surf, int domain, int algo){
         } else if(domain == 1){
             Square_param(t,x,y);
         }
-        
-        bx(vn) = x;
-        by(vn) = y;
-        A.coeffRef(vn,vn) = 1.0;
+        bndnodes[i] = vn;
+        dvalsx[i] = x;
+        dvalsy[i] = y;
     }
-    cout << "setup rhs vectors" << endl;
+
     vector<vector<double>> ps = {{0,0,0},{0,0,0},{0,0,0}};
     vector<vector<double>> elemat = {{0,0,0},{0,0,0},{0,0,0}};
     for(int ii = 0; ii<Surf->nelems; ii++){
@@ -134,13 +133,13 @@ vector<vector<double>> Parametric_Mapping(Mesh* Surf, int domain, int algo){
             Convex_Combo_Map(elemat);
         }
         for(int i = 0; i<3; i++){
-            if(!bdymask[Surf->elems[ii][i]]){
-                for(int j = 0; j<3; j++){
-                    A.coeffRef(Surf->elems[ii][i], Surf->elems[ii][j]) += elemat[i][j];
-                }
+            for(int j = 0; j<3; j++){
+                A.coeffRef(Surf->elems[ii][i], Surf->elems[ii][j]) += elemat[i][j];
             }
         }
     }
+
+    apply_dbc(A,bx,by,bndnodes,dvalsx,dvalsy,is_dir);
     A.makeCompressed();
     cout << "assembled matrix" << endl;
 
@@ -153,8 +152,6 @@ vector<vector<double>> Parametric_Mapping(Mesh* Surf, int domain, int algo){
         params[i][0] = u(i);
         params[i][1] = v(i);
     }
-
-    delete bdymask;
     return params;
 }
 
@@ -325,4 +322,41 @@ bool find_enclosing_tri(Mesh* DT, vector<vector<double>> &params, int* tri, vect
     *tri = -1;
     return false;
     
+}
+
+void apply_dbc(SpMat &A, Eigen::VectorXd &bx, Eigen::VectorXd &by, vector<int> &bndnodes, vector<double> &dvalsx, vector<double> &dvalsy, vector<bool> &is_dir){
+    int ndbc = bndnodes.size();
+    int nv = bx.size();
+    double valx, valy;
+    for (int n = 0; n<nv; n++){
+        if (!is_dir[n]){
+            valx = 0.0;
+            valy = 0.0;
+            for (int jj = 0; jj<ndbc; jj++){
+                valx += A.coeff(n,bndnodes[jj])*dvalsx[jj];
+                valy += A.coeff(n,bndnodes[jj])*dvalsy[jj];
+                if (abs(A.coeff(n,bndnodes[jj])) > 1e-12){
+                    A.coeffRef(n,bndnodes[jj]) = 0.0;
+                }
+            }
+            bx(n) = bx(n) - valx;
+            by(n) = by(n) - valy;
+        }
+    }
+    for (int n = 0; n<ndbc; n++){
+        bx(bndnodes[n]) = dvalsx[n];
+        by(bndnodes[n]) = dvalsy[n];
+    }
+    for (int ii = 0; ii<nv; ii++){
+        if (is_dir[ii]){
+            for (int jj = 0; jj<nv; jj++){
+                if (abs(A.coeff(ii,jj)) > 1e-12){
+                    A.coeffRef(ii,jj) = 0.0;
+                }
+            }
+            A.coeffRef(ii,ii) = 1.0;
+        }
+    }
+    A.prune(1e-6);
+    return;
 }

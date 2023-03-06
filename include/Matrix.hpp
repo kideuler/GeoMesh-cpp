@@ -155,6 +155,21 @@ vector<vector<T>> operator/(const vector<vector<T>> &A, T a){
     }
     return prod;
 }
+// matrix scalar addition
+template <typename T>
+vector<vector<T>> operator+(const vector<vector<T>> &A, T a){
+    int m = A.size();
+    int n = A[0].size();
+
+    vector<vector<T>> prod;
+    prod.assign(m, vector<T>(n, 0));
+    for(int i=0; i<m; i++){
+        for(int j=0; j<n;j++){
+            prod[i][j] = A[i][j]+a;
+        }
+    }
+    return prod;
+}
 
 /// Vector operators
 
@@ -421,6 +436,34 @@ vector<vector<T>> Transpose(vector<vector<T>> &A){
         }
     }
     return B;
+}
+
+template <typename T>
+T max(const vector<T> &u){
+    T M = u[0];
+    for (int i = 1; i<u.size(); i++){
+        M = max(M,u[i]);
+    }
+    return M;
+}
+
+template <typename T>
+T min(const vector<T> &u){
+    T M = u[0];
+    for (int i = 1; i<u.size(); i++){
+        M = min(M,u[i]);
+    }
+    return M;
+}
+
+template <typename T>
+T mean(const vector<T> &u){
+    T M = u[0];
+    for (int i = 1; i<u.size(); i++){
+        M += u[i];
+    }
+    M = M/double(u.size());
+    return M;
 }
 
 #endif

@@ -8,17 +8,6 @@
 #include <chrono>
 using namespace std;
 
-struct StructuredGrid {
-    double minx;
-    double miny;
-    double maxx;
-    double maxy;
-    int nx;
-    int ny;
-    vector<double> data;
-    double interpolate(double x, double y);
-};
-
 struct Spline {
     int nv;
     int degree;
@@ -49,14 +38,12 @@ struct Mesh {
     vector<bool> on_boundary;
     Spline spl;
     Stencil stl;
-    StructuredGrid Grid; 
 
     // major member functions
     void compute_AHF();
     void make_quadratic();
     void decompose_to_linear();
     void compute_Onering(int maxne = 10);
-    void Structured_Grid_init(int nx, int ny);
     void Delaunay_refine(function<double(vector<double>)> r_ref);
     void Delaunay_refine(double r_ref);
     void mesh_smoothing_2d(vector<bool> no_move, int niters = 5, double mu = 0.0, vector<double> refareas={});
