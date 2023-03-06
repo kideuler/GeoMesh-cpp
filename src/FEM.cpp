@@ -29,38 +29,7 @@ vector<double> Poisson_2d(Mesh* msh, vector<double> &frhs, double kappa, vector<
 
     auto start = chrono::high_resolution_clock::now();
 
-    // P1 triangular elements
-    if (false){ // fast assembly for P1 elements
-        vector<vector<double>> elem_Stiff = Zeros<double>(3,3);
-        vector<vector<double>> D = Zeros<double>(2,3);
-        vector<double> elem_load(3);
-        vector<vector<double>> ps = Zeros<double>(3,2);
-        double area, rhs_coeff;
-        for (int ii = 0; ii<msh->nelems; ii++){
-            ps[0] = msh->coords[msh->elems[ii][0]];
-            ps[1] = msh->coords[msh->elems[ii][1]];
-            ps[2] = msh->coords[msh->elems[ii][2]];
-
-            area = ((ps[1][0]-ps[0][0])*(ps[2][1]-ps[0][1]) - \
-            (ps[1][1]-ps[0][1])*(ps[2][0]-ps[0][0]))/2;
-            rhs_coeff = area/3;
-
-            D = {{ps[2][0]-ps[1][0], ps[0][0]-ps[2][0], ps[1][0]-ps[0][0]}, \
-            {ps[2][1]-ps[1][1], ps[0][1]-ps[2][1], ps[1][1]-ps[0][1]}};
-
-            elem_Stiff = (Transpose(D)*D) / (4*area);
-
-            for (int jj = 0; jj<3; jj++){
-                // inserting into stiffness matrix
-                for (int kk = 0; kk<3; kk++){
-                    A.coeffRef(msh->elems[ii][jj], msh->elems[ii][kk]) += kappa*elem_Stiff[jj][kk];
-                }
-
-                // inserting right hand side
-                b(msh->elems[ii][jj]) = frhs[msh->elems[ii][jj]]*(rhs_coeff);
-            }
-        }
-    } else{
+    // Stiffness assembly
         vector<vector<double>> Jt = Zeros<double>(2,2);
         vector<vector<double>> Jtinv = Zeros<double>(2,2);
 
@@ -124,7 +93,6 @@ vector<double> Poisson_2d(Mesh* msh, vector<double> &frhs, double kappa, vector<
                     b(msh->elems[ii][jj]) += v*ws[q]*detJ*phi[q][jj];
                 }
             }
-        }
         
 
 
