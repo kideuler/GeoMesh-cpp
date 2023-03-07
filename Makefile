@@ -10,7 +10,7 @@ make:
 
 .PHONY: clean
 clean:
-	rm -rf *.o
+	rm -rf *.o *.vtk
 
 .PHONY: debug
 debug:

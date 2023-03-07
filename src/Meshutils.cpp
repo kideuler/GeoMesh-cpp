@@ -145,6 +145,14 @@ void WrtieVtk_tri(const Mesh &msh, string filename){
     for (int i = 0; i<nelems; i++){
         fprintf(fid,"\n%i",cell_type);
     }
+
+    if (msh.normals.size() > 0){
+        fprintf(fid, "\n\nPOINT_DATA %i",nv);
+        fprintf(fid, "\nNORMALS normals double\n");
+        for (int i = 0; i<nv; i++){
+            fprintf(fid,"%g %g %g\n",msh.normals[i][0],msh.normals[i][1],msh.normals[i][2]);
+        }
+    }
     fclose(fid);
 }
 
@@ -219,9 +227,8 @@ void WrtieVtk_mixed(const Mesh &msh, string filename){
             }
         }
     }
-
-    fclose(fid);
     delete quads;
+    fclose(fid);
 }
 
 void WrtieVtk_tri(const Mesh &msh, const vector<double> &data, string filename){
@@ -328,4 +335,40 @@ Mesh ReadObj_tri(string filename){
    msh.delete_elem.resize(msh.nelems);
    msh.normals.resize(0);
    return msh;
+}
+
+void save_array(const vector<vector<double>> &A, string filename){
+    int m = A.size();
+    int n;
+
+    FILE *fid;
+    fid = fopen(filename.c_str(),"w");
+
+    fprintf(fid, "%i",m);
+    for (int i = 0; i<m; i++){
+        n = A[i].size();
+        fprintf(fid, "\n%i ", n);
+        for (int j = 0; j<n; j++){
+            fprintf(fid, "%g ", A[i][j]);
+        }
+    }
+    fclose(fid);
+}
+
+vector<vector<double>> read_array(string filename){
+    string line;
+    int m,n;
+    ifstream in(filename);
+    getline(in, line);
+    istringstream ss( line );                           
+    ss >> m;
+    vector<vector<double>> A(m);
+    for (int i = 0; i<m; i++){
+        ss >> n;
+        A[i].resize(n);
+        for (int j = 0; j<n; j++){
+            ss >> A[i][j];
+        }
+    }
+    return A;
 }

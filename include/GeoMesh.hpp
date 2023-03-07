@@ -44,6 +44,7 @@ struct Mesh {
     void make_quadratic();
     void decompose_to_linear();
     void compute_Onering(int maxne = 10);
+    void compute_normals();
     void Delaunay_refine(function<double(vector<double>)> r_ref);
     void Delaunay_refine(double r_ref);
     void mesh_smoothing_2d(vector<bool> no_move, int niters = 5, double mu = 0.0, vector<double> refareas={});
@@ -67,7 +68,6 @@ vector<double> Poisson_2d(Mesh* msh, vector<double> &frhs, double kappa, vector<
 // Surface remeshing
 void Parametric2Surface(Mesh *Surf, vector<vector<double>> &params, Mesh *msh);
 vector<vector<double>> Parametric_Mapping(Mesh* Surf, int domain=0, int algo=0);
-void Compute_normals(Mesh* Surf);
 vector<double> Average_nodal_edgelength(Mesh* Surf, vector<vector<double>> &params);
 
 // spline functions
@@ -94,6 +94,8 @@ void WrtieVtk_tri(const Mesh &msh, const vector<double> &data, string filename);
 Mesh ReadObj_tri(string filename);
 bool check_sibhfs(Mesh* DT);
 bool check_jacobians(Mesh* DT);
+void save_array(const vector<vector<double>> &A, string filename);
+vector<vector<double>> read_array(string filename);
 
 // small functions to be used in multiple files
 vector<double> min_array(const vector<vector<double>> &xs);

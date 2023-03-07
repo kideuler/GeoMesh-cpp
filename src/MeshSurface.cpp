@@ -17,6 +17,7 @@ void Parametric2Surface(Mesh *Surf, vector<vector<double>> &params, Mesh *msh){
     int nv = msh->coords.size();
     bool use_cubic = Surf->normals.size() > 0;
     vector<vector<double>> coords_new = Zeros<double>(nv,3);
+    msh->normals = Zeros<double>(nv,3);
 
     // main loop
     int tri = 0;
@@ -26,8 +27,8 @@ void Parametric2Surface(Mesh *Surf, vector<vector<double>> &params, Mesh *msh){
     vector<vector<double>> ps = {{0,0},{0,0},{0,0}};
     vector<vector<double>> xs = {{0,0,0},{0,0,0},{0,0,0}};
     double det_xi_u,xi,eta,zeta;
-    double w;
-    vector<double> a300(3), a030(3), a003(3), a210(3), a120(3), a021(3), a012(3), a102(3), a201(3), E(3), V(3), a111(3), n1(3), n2(3), n3(3);
+    double w,mu;
+    vector<double> a300(3), a030(3), a003(3), a210(3), a120(3), a021(3), a012(3), a102(3), a201(3), E(3), V(3), a111(3), n1(3), n2(3), n3(3), n110(3), n011(3), n101(3);
     for (int i = 0; i<nv; i++){
         passed = find_enclosing_tri(Surf ,params, &tri, msh->coords[i]);
         if (passed){
@@ -75,10 +76,26 @@ void Parametric2Surface(Mesh *Surf, vector<vector<double>> &params, Mesh *msh){
                 xi = xi_eta[0]; eta = xi_eta[1];
                 zeta = 1-xi-eta;
 
-                coords_new[i] = zeta*a300 + xi*a030 + eta*a300 + \
+                coords_new[i] = zeta*zeta*zeta*a300 + xi*xi*xi*a030 + eta*eta*eta*a003 + \
                 3.0*zeta*zeta*xi*a210 +  3.0*zeta*xi*xi*a120 + 3.0*zeta*zeta*eta*a201 + \
                 3.0*xi*xi*eta*a021 + 3.0*zeta*eta*eta*a102 + 3.0*xi*eta*eta*a201 + 6.0*xi*eta*zeta*a111;
-                cout << coords_new[i][0] << " " << coords_new[i][1] << " " << coords_new[i][2] << endl;
+
+                // computing quadratic normals
+                mu = 2*inner(xs[1]-xs[0],n1+n2)/inner(xs[1]-xs[0],xs[1]-xs[0]);
+                n110 = n1 + n2 - mu*(xs[1]-xs[0]);
+                n110 /= norm(n110);
+
+                mu = 2*inner(xs[2]-xs[1],n2+n3)/inner(xs[2]-xs[1],xs[2]-xs[1]);
+                n011 = n2 + n3 - mu*(xs[2]-xs[1]);
+                n011 /= norm(n011);
+
+                mu = 2*inner(xs[0]-xs[2],n3+n1)/inner(xs[0]-xs[2],xs[0]-xs[2]);
+                n101 = n3 + n1 - mu*(xs[0]-xs[2]);
+                n101 /= norm(n101);
+
+                msh->normals[i] = zeta*zeta*n1 + xi*xi*n2 + eta*eta*n3 + \
+                zeta*xi*n110 + xi*eta*n011 + xi*eta*n101; 
+                msh->normals[i] /= norm(msh->normals[i]);
             } else{
                 coords_new[i] = (1-xi_eta[0]-xi_eta[1])*xs[0] + xi_eta[0]*xs[1] + xi_eta[1]*xs[2];
             }
@@ -183,18 +200,18 @@ vector<double> Average_nodal_edgelength(Mesh* Surf, vector<vector<double>> &para
     return hnode;
 }
 
-void Compute_normals(Mesh* Surf){
-    int nv = Surf->coords.size();
-    Surf->normals = Zeros<double>(nv,3);
+void Mesh::compute_normals(){
+    int nv = coords.size();
+    normals = Zeros<double>(nv,3);
     vector<double> u(3);
     vector<double> v(3);
     vector<double> n(3);
     double dotuv, ul, vl, w, nl;
 
-    for(int i = 0; i<Surf->nelems; i++){
+    for(int i = 0; i<nelems; i++){
         for(int j = 0; j<3; j++){
-            u = Surf->coords[Surf->elems[i][(j+1)%3]]-Surf->coords[Surf->elems[i][j]];
-            v = Surf->coords[Surf->elems[i][(j+2)%3]]-Surf->coords[Surf->elems[i][j]];
+            u = coords[elems[i][(j+1)%3]]-coords[elems[i][j]];
+            v = coords[elems[i][(j+2)%3]]-coords[elems[i][j]];
             dotuv = u[0]*v[0] + u[1]*v[1] + u[2]*v[2];
             ul = sqrt(u[0]*u[0] + u[1]*u[1] + u[2]*u[2]);
             vl = sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
@@ -202,10 +219,14 @@ void Compute_normals(Mesh* Surf){
             n = {u[1]*v[2] - u[2]*v[1], u[2]*v[0] - u[0]*v[2] ,u[0]*v[1] - u[1]*v[0]};
             nl = sqrt(n[0]*n[0] + n[1]*n[1] + n[2]*n[2]);
 
-            Surf->normals[Surf->elems[i][j]][0] += (w/(2*M_PI))*n[0]/nl;
-            Surf->normals[Surf->elems[i][j]][1] += (w/(2*M_PI))*n[1]/nl;
-            Surf->normals[Surf->elems[i][j]][2] += (w/(2*M_PI))*n[2]/nl;
+            normals[elems[i][j]][0] += (w/(2*M_PI))*n[0]/nl;
+            normals[elems[i][j]][1] += (w/(2*M_PI))*n[1]/nl;
+            normals[elems[i][j]][2] += (w/(2*M_PI))*n[2]/nl;
         }
+    }
+
+    for (int i = 0; i<nv; i++){
+        normals[i] /= norm(normals[i]);
     }
     return;
 }
