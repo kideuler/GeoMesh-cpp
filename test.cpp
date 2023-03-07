@@ -113,14 +113,16 @@ function<double(vector<double>)> create_grad(const vector<vector<double>> &ps, d
     return hF;
 }
 
-void test1();
-void test2();
+void test1(); // mesh generation and fem on ellipse
+void test2(); // mesh generation and fem on curvature adaptive flower hole
+void test3(); // mesh generation and fem on circle with mona-lisa embedded 
+void test4(); // surface reconstruction of stanford bunny
+
 /**
  * STILL TO DO: create tests print timings and angles
  * - offcenters
  * - cubic hermite interpolation of surface points
  */
-//vector<vector<double>> picture();
 int main(int argc, char *argv[]){
     istringstream iss(argv[1]);
     int arg;
@@ -130,193 +132,9 @@ int main(int argc, char *argv[]){
     } else if (arg == 2){
         test2();
     } else if (arg == 3){
-        cout << "performing test 3: meshing circle with mona lisa gradiation" << endl;
-        int npoints_spline = 250;
-
-        // generating points on ellipse for the spline
-        vector<vector<double>> Spline_points = Circle(npoints_spline);
-
-        // creating spline degree 3
-        auto start = chrono::high_resolution_clock::now();
-        Spline spl = spline_init(Spline_points,3);
-        auto stop = chrono::high_resolution_clock::now();
-        auto duration = chrono::duration_cast<chrono::microseconds>(stop - start);
-        cout << "created Spline in " << duration.count()/1e6 << " seconds" << endl << endl;
-
-        // interpolating points using spline
-        int npoints = 100;
-        vector<vector<double>> points = Zeros<double>(npoints,2);
-        vector<vector<int>> segments = Zeros<int>(npoints,2);
-        vector<double> param(npoints);
-        for (int i = 0; i<npoints; i++){
-            param[i] = double(i)/double(npoints);
-            points[i] = spline_var(&spl, param[i]);
-            segments[i][0] = i;
-            segments[i][1] = (i+1)%npoints;
-        }
-
-        // calculating average edge length
-        double h = 0.0;
-        for (int i = 0; i<npoints; i++){
-            h = h + norm(points[(i+1)%npoints]-points[i]);
-        }
-        h = 1*(sqrt(3)/3)*(h/(double(npoints)-1));
-
-        // calculating local edgelength function
-        vector<vector<double>> ps = read_array("data/picture.dat");
-        function<double(vector<double>)> H = create_grad(ps, h, 0.15, 0.01);
-        /*
-        Note: this is not an efficient way to do local refinement as the time complexity is O(n^2)
-        In the future with more time I would like to implement a Marching squares or quadtree structure to
-        interpolate local edge lengths
-        */
-
-        // initial Mesh
-        start = chrono::high_resolution_clock::now();
-        Mesh msh = GeoMesh_Delaunay_Mesh(points);
-        stop = chrono::high_resolution_clock::now();
-        duration = chrono::duration_cast<chrono::microseconds>(stop - start);
-        cout << "finished initial Mesh in " << duration.count()/1e6 << " seconds" << endl << endl;
-        msh.spl = spl;
-        msh.param = param;
-        
-        // mesh refinement
-        start = chrono::high_resolution_clock::now();
-        msh.Delaunay_refine(H);
-        stop = chrono::high_resolution_clock::now();
-        duration = chrono::duration_cast<chrono::microseconds>(stop - start);
-        cout << "finished delaunay refinement in " << duration.count()/1e6 << " seconds" << endl;
-        cout << "minimum angle: " << check_minangle(&msh) << endl << endl;
-
-        // mesh smoothing
-        start = chrono::high_resolution_clock::now();
-        msh.mesh_smoothing_2d(msh.find_boundary_nodes(), 50, 0.0);;
-        stop = chrono::high_resolution_clock::now();
-        duration = chrono::duration_cast<chrono::microseconds>(stop - start);
-        cout << "finished mesh smoothing in " << duration.count()/1e6 << " seconds" << endl;
-        cout << "minimum angle: " << check_minangle(&msh) << endl << endl;
-
-        // FEM goes here
-        cout << "Performing FEM with P1 elements" << endl;
-        double kappa = 2.0;
-        int nv = msh.coords.size();
-        vector<double> u = uexpr(msh.coords); // true solution
-        vector<double> frhs = ulap(msh.coords, kappa); // rhs expression
-        vector<int> bndnodes = msh.boundary_nodes(); // finding boundary nodes
-        int nbnd = bndnodes.size();
-        vector<double> dvals(nbnd); // dirichlet values
-        for (int n = 0; n<nbnd; n++) {dvals[n] = u[bndnodes[n]];}
-        vector<double> u_h = Poisson_2d(&msh, frhs, kappa, bndnodes, dvals);
-        vector<double> error(nv);
-        double maxE = 0.0;
-        for (int n = 0; n<nv; n++) {error[n] = abs(u[n]-u_h[n]); if(error[n]>maxE){maxE=error[n];}}
-        double P1_error = norm(error)/norm(u);
-        cout << "l2 relative error from Linear mesh: " << P1_error << endl;
-        cout << "l_inf absolute error from Linear mesh: " << maxE << endl << endl;
-
-        cout << "Performing FEM with P2 elements" << endl;
-        msh.make_quadratic();
-        nv = msh.coords.size();
-        u = uexpr(msh.coords); // true solution
-        frhs = ulap(msh.coords, kappa); // rhs expression
-        bndnodes = msh.boundary_nodes(); // finding boundary nodes
-        nbnd = bndnodes.size();
-        dvals.resize(nbnd);
-        for (int n = 0; n<nbnd; n++) {dvals[n] = u[bndnodes[n]];}
-        u_h = Poisson_2d(&msh, frhs, kappa, bndnodes, dvals);
-        error.resize(nv);
-        maxE = 0.0;
-        for (int n = 0; n<nv; n++) {error[n] = abs(u[n]-u_h[n]); if(error[n]>maxE){maxE=error[n];}}
-        double P2_error = norm(error)/norm(u);
-        cout << "l2 relative error from Quadratic mesh: " << P2_error << endl;
-        cout << "l_inf absolute error from Quadratic mesh: " << maxE << endl << endl;
-
-        // writing
-        WrtieVtk_tri(msh, error, "test3.vtk");
-        cout << "finished writing to file" << endl;
-
-
-
-
+        test3();
     } else if (arg == 4){
-        // loading bunny mesh
-        string filename = "data/bunny.obj";
-        Mesh Surface = ReadObj_tri(filename);
-        Surface.compute_AHF();
-        Surface.compute_normals();
-
-        auto start = chrono::high_resolution_clock::now();
-        vector<vector<double>> Params =  Parametric_Mapping(&Surface);
-        auto stop = chrono::high_resolution_clock::now();
-        //Surface.coords = Params;
-
-        auto duration = chrono::duration_cast<chrono::microseconds>(stop - start);
-        cout << "finished parametric mapping of surface in " << duration.count()/1e6 << " seconds" << endl << endl;
-
-        vector<double> hnode = Average_nodal_edgelength(&Surface, Params);
-        double hmax = max(hnode);
-        hnode = hnode/hmax;
-
-        int npoints_spline = 250;
-        vector<vector<double>> Spline_points = Circle(npoints_spline);
-
-        // creating spline degree 3
-        start = chrono::high_resolution_clock::now();
-        Spline spl = spline_init(Spline_points,3);
-        stop = chrono::high_resolution_clock::now();
-        duration = chrono::duration_cast<chrono::microseconds>(stop - start);
-        cout << "created Spline in " << duration.count()/1e6 << " seconds" << endl << endl;
-
-        // interpolating points using spline
-        int npoints = 30;
-        vector<vector<double>> points = Zeros<double>(npoints,2);
-        vector<vector<int>> segments = Zeros<int>(npoints,2);
-        vector<double> param(npoints);
-        for (int i = 0; i<npoints; i++){
-            param[i] = double(i)/double(npoints);
-            points[i] = spline_var(&spl, param[i]);
-            segments[i][0] = i;
-            segments[i][1] = (i+1)%npoints;
-        }
-
-        // calculating average edge length
-        double h = 0.0;
-        for (int i = 0; i<npoints; i++){
-            h = h + norm(points[(i+1)%npoints]-points[i]);
-        }
-        h = 1*(sqrt(3)/3)*(h/(double(npoints)-1));
-
-        // initial Mesh
-        start = chrono::high_resolution_clock::now();
-        Mesh msh = GeoMesh_Delaunay_Mesh(points);
-        stop = chrono::high_resolution_clock::now();
-        duration = chrono::duration_cast<chrono::microseconds>(stop - start);
-        cout << "finished initial Mesh in " << duration.count()/1e6 << " seconds" << endl << endl;
-        msh.spl = spl;
-        msh.param = param;
-        
-        // mesh refinement
-        start = chrono::high_resolution_clock::now();
-        function<double(vector<double>)> H = create_grad(Params, h, hnode, 0.0005);
-        msh.Delaunay_refine(H);
-        stop = chrono::high_resolution_clock::now();
-        duration = chrono::duration_cast<chrono::microseconds>(stop - start);
-        cout << "finished delaunay refinement in " << duration.count()/1e6 << " seconds" << endl;
-        cout << "minimum angle: " << check_minangle(&msh) << endl << endl;
-
-        // mesh smoothing
-        start = chrono::high_resolution_clock::now();
-        msh.mesh_smoothing_2d(msh.find_boundary_nodes(), 50, 0.0);;
-        stop = chrono::high_resolution_clock::now();
-        duration = chrono::duration_cast<chrono::microseconds>(stop - start);
-        cout << "finished mesh smoothing in " << duration.count()/1e6 << " seconds" << endl;
-        cout << "minimum angle: " << check_minangle(&msh) << endl << endl;
-
-        // mapping parameter mesh back to surface
-        Parametric2Surface(&Surface, Params, &msh);
-
-        WrtieVtk_tri(msh, "test4.vtk");
-        cout << "finished writing to file" << endl;
+        test4();
     }
 }
 
@@ -409,20 +227,6 @@ void test1(){
         double P2_error = norm(error)/norm(u);
         cout << "l2 relative error from Quadratic mesh: " << P2_error << endl;
         cout << "l_inf relative error from Linear mesh: " << maxE << endl << endl;
-
-        cout << "Performing FEM with refined P1 elements" << endl;
-        msh.decompose_to_linear();
-        bndnodes = msh.boundary_nodes(); // finding boundary nodes
-        nbnd = bndnodes.size();
-        dvals.resize(nbnd);
-        for (int n = 0; n<nbnd; n++) {dvals[n] = u[bndnodes[n]];}
-        u_h = Poisson_2d(&msh, frhs, kappa, bndnodes, dvals);
-        error.resize(nv);
-        maxE = 0.0;
-        for (int n = 0; n<nv; n++) {error[n] = abs(u[n]-u_h[n]); if(error[n]>maxE){maxE=error[n];}}
-        double P1r_error = norm(error)/norm(u);
-        cout << "l2 relative error from refined Linear mesh: " << P1r_error << endl;
-        cout << "l_inf relative error from refined Linear mesh: " << maxE << endl << endl;
 
         // writing
         WrtieVtk_tri(msh, error, "test1.vtk");
@@ -534,8 +338,101 @@ void test2(){
         cout << "l2 relative error from Quadratic mesh: " << P2_error << endl;
         cout << "l_inf absolute error from Quadratic mesh: " << maxE << endl << endl;
 
-        cout << "Performing FEM with refined P1 elements" << endl;
-        msh.decompose_to_linear();
+        // writing
+        WrtieVtk_tri(msh, error, "test2.vtk");
+        cout << "finished writing to file" << endl;
+}
+
+void test3(){
+    cout << "performing test 3: meshing circle with mona lisa gradiation" << endl;
+        int npoints_spline = 250;
+
+        // generating points on ellipse for the spline
+        vector<vector<double>> Spline_points = Circle(npoints_spline);
+
+        // creating spline degree 3
+        auto start = chrono::high_resolution_clock::now();
+        Spline spl = spline_init(Spline_points,3);
+        auto stop = chrono::high_resolution_clock::now();
+        auto duration = chrono::duration_cast<chrono::microseconds>(stop - start);
+        cout << "created Spline in " << duration.count()/1e6 << " seconds" << endl << endl;
+
+        // interpolating points using spline
+        int npoints = 100;
+        vector<vector<double>> points = Zeros<double>(npoints,2);
+        vector<vector<int>> segments = Zeros<int>(npoints,2);
+        vector<double> param(npoints);
+        for (int i = 0; i<npoints; i++){
+            param[i] = double(i)/double(npoints);
+            points[i] = spline_var(&spl, param[i]);
+            segments[i][0] = i;
+            segments[i][1] = (i+1)%npoints;
+        }
+
+        // calculating average edge length
+        double h = 0.0;
+        for (int i = 0; i<npoints; i++){
+            h = h + norm(points[(i+1)%npoints]-points[i]);
+        }
+        h = 1*(sqrt(3)/3)*(h/(double(npoints)-1));
+
+        // calculating local edgelength function
+        vector<vector<double>> ps = read_array("data/picture.dat");
+        function<double(vector<double>)> H = create_grad(ps, h, 0.15, 0.01);
+        /*
+        Note: this is not an efficient way to do local refinement as the time complexity is O(n^2)
+        In the future with more time I would like to implement a Marching squares or quadtree structure to
+        interpolate local edge lengths
+        */
+
+        // initial Mesh
+        start = chrono::high_resolution_clock::now();
+        Mesh msh = GeoMesh_Delaunay_Mesh(points);
+        stop = chrono::high_resolution_clock::now();
+        duration = chrono::duration_cast<chrono::microseconds>(stop - start);
+        cout << "finished initial Mesh in " << duration.count()/1e6 << " seconds" << endl << endl;
+        msh.spl = spl;
+        msh.param = param;
+        
+        // mesh refinement
+        start = chrono::high_resolution_clock::now();
+        msh.Delaunay_refine(H);
+        stop = chrono::high_resolution_clock::now();
+        duration = chrono::duration_cast<chrono::microseconds>(stop - start);
+        cout << "finished delaunay refinement in " << duration.count()/1e6 << " seconds" << endl;
+        cout << "minimum angle: " << check_minangle(&msh) << endl << endl;
+
+        // mesh smoothing
+        start = chrono::high_resolution_clock::now();
+        msh.mesh_smoothing_2d(msh.find_boundary_nodes(), 50, 0.0);;
+        stop = chrono::high_resolution_clock::now();
+        duration = chrono::duration_cast<chrono::microseconds>(stop - start);
+        cout << "finished mesh smoothing in " << duration.count()/1e6 << " seconds" << endl;
+        cout << "minimum angle: " << check_minangle(&msh) << endl << endl;
+
+        // FEM goes here
+        cout << "Performing FEM with P1 elements" << endl;
+        double kappa = 2.0;
+        int nv = msh.coords.size();
+        vector<double> u = uexpr(msh.coords); // true solution
+        vector<double> frhs = ulap(msh.coords, kappa); // rhs expression
+        vector<int> bndnodes = msh.boundary_nodes(); // finding boundary nodes
+        int nbnd = bndnodes.size();
+        vector<double> dvals(nbnd); // dirichlet values
+        for (int n = 0; n<nbnd; n++) {dvals[n] = u[bndnodes[n]];}
+        vector<double> u_h = Poisson_2d(&msh, frhs, kappa, bndnodes, dvals);
+        vector<double> error(nv);
+        double maxE = 0.0;
+        for (int n = 0; n<nv; n++) {error[n] = abs(u[n]-u_h[n]); if(error[n]>maxE){maxE=error[n];}}
+        double P1_error = norm(error)/norm(u);
+        cout << "l2 relative error from Linear mesh: " << P1_error << endl;
+        cout << "l_inf absolute error from Linear mesh: " << maxE << endl << endl;
+
+        cout << "Performing FEM with P2 elements" << endl;
+        msh.make_quadratic();
+        nv = msh.coords.size();
+        u = uexpr(msh.coords); // true solution
+        frhs = ulap(msh.coords, kappa); // rhs expression
         bndnodes = msh.boundary_nodes(); // finding boundary nodes
         nbnd = bndnodes.size();
         dvals.resize(nbnd);
@@ -544,11 +441,92 @@ void test2(){
         error.resize(nv);
         maxE = 0.0;
         for (int n = 0; n<nv; n++) {error[n] = abs(u[n]-u_h[n]); if(error[n]>maxE){maxE=error[n];}}
-        double P1r_error = norm(error)/norm(u);
-        cout << "l2 relative error from refined Linear mesh: " << P1r_error << endl;
-        cout << "l_inf relative error from refined Linear mesh: " << maxE << endl << endl;
+        double P2_error = norm(error)/norm(u);
+        cout << "l2 relative error from Quadratic mesh: " << P2_error << endl;
+        cout << "l_inf absolute error from Quadratic mesh: " << maxE << endl << endl;
 
         // writing
-        WrtieVtk_tri(msh, error, "test2.vtk");
+        WrtieVtk_tri(msh, error, "test3.vtk");
+        cout << "finished writing to file" << endl;
+}
+
+void test4(){
+    // loading bunny mesh
+        string filename = "data/bunny.obj";
+        Mesh Surface = ReadObj_tri(filename);
+        Surface.compute_AHF();
+        Surface.compute_normals();
+
+        auto start = chrono::high_resolution_clock::now();
+        vector<vector<double>> Params =  Parametric_Mapping(&Surface);
+        auto stop = chrono::high_resolution_clock::now();
+        //Surface.coords = Params;
+
+        auto duration = chrono::duration_cast<chrono::microseconds>(stop - start);
+        cout << "finished parametric mapping of surface in " << duration.count()/1e6 << " seconds" << endl << endl;
+
+        vector<double> hnode = Average_nodal_edgelength(&Surface, Params);
+        double hmax = max(hnode);
+        hnode = hnode/hmax;
+
+        int npoints_spline = 250;
+        vector<vector<double>> Spline_points = Circle(npoints_spline);
+
+        // creating spline degree 3
+        start = chrono::high_resolution_clock::now();
+        Spline spl = spline_init(Spline_points,3);
+        stop = chrono::high_resolution_clock::now();
+        duration = chrono::duration_cast<chrono::microseconds>(stop - start);
+        cout << "created Spline in " << duration.count()/1e6 << " seconds" << endl << endl;
+
+        // interpolating points using spline
+        int npoints = 30;
+        vector<vector<double>> points = Zeros<double>(npoints,2);
+        vector<vector<int>> segments = Zeros<int>(npoints,2);
+        vector<double> param(npoints);
+        for (int i = 0; i<npoints; i++){
+            param[i] = double(i)/double(npoints);
+            points[i] = spline_var(&spl, param[i]);
+            segments[i][0] = i;
+            segments[i][1] = (i+1)%npoints;
+        }
+
+        // calculating average edge length
+        double h = 0.0;
+        for (int i = 0; i<npoints; i++){
+            h = h + norm(points[(i+1)%npoints]-points[i]);
+        }
+        h = 1*(sqrt(3)/3)*(h/(double(npoints)-1));
+
+        // initial Mesh
+        start = chrono::high_resolution_clock::now();
+        Mesh msh = GeoMesh_Delaunay_Mesh(points);
+        stop = chrono::high_resolution_clock::now();
+        duration = chrono::duration_cast<chrono::microseconds>(stop - start);
+        cout << "finished initial Mesh in " << duration.count()/1e6 << " seconds" << endl << endl;
+        msh.spl = spl;
+        msh.param = param;
+        
+        // mesh refinement
+        start = chrono::high_resolution_clock::now();
+        function<double(vector<double>)> H = create_grad(Params, h, hnode, 0.0005);
+        msh.Delaunay_refine(H);
+        stop = chrono::high_resolution_clock::now();
+        duration = chrono::duration_cast<chrono::microseconds>(stop - start);
+        cout << "finished delaunay refinement in " << duration.count()/1e6 << " seconds" << endl;
+        cout << "minimum angle: " << check_minangle(&msh) << endl << endl;
+
+        // mesh smoothing
+        start = chrono::high_resolution_clock::now();
+        msh.mesh_smoothing_2d(msh.find_boundary_nodes(), 50, 0.0);;
+        stop = chrono::high_resolution_clock::now();
+        duration = chrono::duration_cast<chrono::microseconds>(stop - start);
+        cout << "finished mesh smoothing in " << duration.count()/1e6 << " seconds" << endl;
+        cout << "minimum angle: " << check_minangle(&msh) << endl << endl;
+
+        // mapping parameter mesh back to surface
+        Parametric2Surface(&Surface, Params, &msh);
+
+        WrtieVtk_tri(msh, "test4.vtk");
         cout << "finished writing to file" << endl;
 }

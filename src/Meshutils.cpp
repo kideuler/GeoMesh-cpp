@@ -364,6 +364,8 @@ vector<vector<double>> read_array(string filename){
     ss >> m;
     vector<vector<double>> A(m);
     for (int i = 0; i<m; i++){
+        getline(in, line);
+        istringstream ss( line );
         ss >> n;
         A[i].resize(n);
         for (int j = 0; j<n; j++){

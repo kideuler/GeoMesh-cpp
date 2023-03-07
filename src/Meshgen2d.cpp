@@ -5,6 +5,7 @@ using namespace std;
 /// subfunctions for delaunay triangulation
 double eval_alpha(const vector<vector<double>> xs,double r_ref);
 static vector<double> circumcenter(const vector<vector<double>> xs);
+static vector<double> off_circumcenter(const vector<vector<double>> xs, double beta);
 static bool inside_circumtri(const vector<vector<double>> xs, const vector<double> ps);
 void Recursive_tri_delete(Mesh* DT, int hfid);
 static bool Line_cross(const vector<double> &p1, const vector<double> &p2, const vector<double> &p3, const vector<double> &p4);
@@ -362,7 +363,7 @@ void Mesh::Delaunay_refine(function<double(vector<double>)> r_ref){
             ps[0] = coords[elems[e][0]];
             ps[1] = coords[elems[e][1]];
             ps[2] = coords[elems[e][2]];
-            C = circumcenter(ps);
+            C = off_circumcenter(ps,sqrt(2));
             C[0] += 1e-4*unif(re);
             C[1] += 1e-4*unif(re);
             // sanity check
@@ -1382,7 +1383,7 @@ static vector<double> circumcenter(const vector<vector<double>> xs){
     return {ux/D, uy/D};
 }
 /// find offcenter steiner point outlined in https://doi.org/10.1016/j.comgeo.2008.06.002
-static vector<double> off_circumcenter(const vector<vector<double>> xs){
+static vector<double> off_circumcenter(const vector<vector<double>> xs, double beta){
     vector<double> c1 = circumcenter(xs);
     vector<vector<double>> ps = Zeros<double>(3,2);
     vector<double> m(2);
@@ -1397,7 +1398,16 @@ static vector<double> off_circumcenter(const vector<vector<double>> xs){
             ps[1] = xs[(i+1)%3];
         }
     }
-    return c1;
+    ps[2] = c1;
+    vector<double> c2 = circumcenter(ps);
+    double distc1c2 = norm(c1-c2);
+    vector<double> c;
+    if (distc1c2 <= beta*distpq){
+        c = c1;
+    } else{
+        c = c2 + 0.95*beta*distpq*(c2-m)/norm(c2-m);
+    }
+    return c;
 }
 
 /// find whether point is inside the circumcircle of a triangle

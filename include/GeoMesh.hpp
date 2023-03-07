@@ -111,34 +111,3 @@ struct stack
 };
 void push_stack(stack** head, int hfid);
 void pop_stack(stack** head);
-
-
-// Functions necessary for Blossom algorithm of triangle stitching
-struct Blossom {
-    int n, m;
-    vector<int> mate;
-    vector<vector<int>> b;
-    vector<int> p, d, bl;
-    vector<vector<int>> G;
-    vector<vector<int>> E;
-    Blossom(int n) : n(n) {
-        m = n + n / 2;
-        mate.assign(n, -1);
-        b.resize(m);
-        p.resize(m);
-        d.resize(m);
-        bl.resize(m);
-        G.assign(m, vector<int>(m, -1));
-        E.assign(m, vector<int>(m, -1));
-    }
-    void add_edge(int u, int v);
-    void add_edge(int u, int v, int lid);
-    void match(int u, int v);
-    vector<int> trace(int x);
-    void contract(int c, int x, int y, vector<int> &vx, vector<int> &vy);
-    vector<int> lift(vector<int> &vx);
-    int solve();
-};
-
-Blossom Mesh2Graph(Mesh* msh);
-void Tris2quads_blossom(Mesh *msh, Blossom* B);
