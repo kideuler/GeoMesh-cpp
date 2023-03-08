@@ -294,6 +294,63 @@ void WrtieVtk_tri(const Mesh &msh, const vector<double> &data, string filename){
     fclose(fid);
 }
 
+void WrtieVtk_Graph(const Mesh &msh, string filename){
+    FILE *fid;
+    fid = fopen(filename.c_str(),"w");
+    fprintf(fid,"# vtk DataFile Version 3.0\n");
+    fprintf(fid,"This file was written using writevtk_unstr.m\n");
+    fprintf(fid,"ASCII\n");
+
+    int nv = msh.coords.size();
+    int ndims = msh.coords[0].size();
+    int nelems = msh.elems.size();
+    int nelem_coeff = 3;
+    int cell_type = 3;
+
+    // header for points
+    fprintf(fid, "DATASET UNSTRUCTURED_GRID\n");
+    fprintf(fid, "POINTS %i double",nv);
+
+    // write out vertices
+    if (ndims == 2){
+        for (int i=0; i<nv;i++){
+            fprintf(fid,"\n%g %g %g",msh.coords[i][0],msh.coords[i][1],0.0);
+        }
+    } else {
+        for (int i=0; i<nv;i++){
+            fprintf(fid,"\n%g %g %g",msh.coords[i][0],msh.coords[i][1],msh.coords[i][2]);
+        }
+    }
+
+    // write out connectivity header
+    int nedges = msh.GraphEdges.size();
+    int v1,v2, eid, lid;
+    fprintf(fid,"\n\nCELLS %i %i", nedges, nelem_coeff*nedges);
+    for (int i = 0; i<nedges; i++){
+        eid = hfid2eid(msh.GraphEdges[i].hfids[0])-1;
+        lid = hfid2lid(msh.GraphEdges[i].hfids[0])-1;
+        v1 = msh.elems[eid][lid];
+        v2 = msh.elems[eid][(lid+1)%3];
+        fprintf(fid, "\n%d %d %d", 2,v1,v2);
+    }
+
+    // write out cell types
+    fprintf(fid, "\n\nCELL_TYPES %i", nedges);
+    for (int i = 0; i<nedges; i++){
+        fprintf(fid,"\n%i",cell_type);
+    }
+
+    // write cell data
+    fprintf(fid, "\n\nCELL_DATA %i",nedges);
+    fprintf(fid, "\nSCALARS meshdata double\n");
+    fprintf(fid, "LOOKUP_TABLE default\n");
+    for (int i = 0; i<nedges; i++){
+        fprintf(fid,"%g\n",(double) msh.GraphEdges[i].color);
+    }
+
+    fclose(fid);
+}
+
 Mesh ReadObj_tri(string filename){
     Mesh msh;
 

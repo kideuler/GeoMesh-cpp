@@ -113,10 +113,13 @@ function<double(vector<double>)> create_grad(const vector<vector<double>> &ps, d
     return hF;
 }
 
+Mesh Ellipse_mesh(int npoints);
+
 void test1(); // mesh generation and fem on ellipse
 void test2(); // mesh generation and fem on curvature adaptive flower hole
 void test3(); // mesh generation and fem on circle with mona-lisa embedded 
 void test4(); // surface reconstruction of stanford bunny
+void test5(); // testing branch for edge coloring and quad mesh gen
 
 /**
  * STILL TO DO: create tests print timings and angles
@@ -135,63 +138,14 @@ int main(int argc, char *argv[]){
         test3();
     } else if (arg == 4){
         test4();
+    } else if (arg == 5){
+        test5();
     }
 }
 
 void test1(){
     cout << "performing test 1: meshing an ellipse" << endl << endl;
-        int npoints_spline = 250;
-
-        // generating points on ellipse for the spline
-        vector<vector<double>> Spline_points = Ellipse(npoints_spline);
-
-        // creating spline
-        auto start = chrono::high_resolution_clock::now();
-        Spline spl = spline_init(Spline_points,3);
-        auto stop = chrono::high_resolution_clock::now();
-        auto duration = chrono::duration_cast<chrono::microseconds>(stop - start);
-        cout << "created Spline in " << duration.count()/1e6 << " seconds" << endl << endl;
-
-        // interpolating points using spline
-        int npoints = 100;
-        vector<vector<double>> points = Zeros<double>(npoints,2);
-        vector<double> param(npoints);
-        for (int i = 0; i<npoints; i++){
-            param[i] = double(i)/double(npoints);
-            points[i] = spline_var(&spl, param[i]);
-        } 
-
-        // calculating average edge length
-        double h = 0.0;
-        for (int i = 0; i<npoints; i++){
-            h = h + norm(points[(i+1)%npoints]-points[i]);
-        }
-        h = 1*(sqrt(3)/3)*(h/(double(npoints)-1));
-
-        // initial Mesh
-        start = chrono::high_resolution_clock::now();
-        Mesh msh = GeoMesh_Delaunay_Mesh(points);
-        stop = chrono::high_resolution_clock::now();
-        duration = chrono::duration_cast<chrono::microseconds>(stop - start);
-        cout << "finished initial Mesh in " << duration.count()/1e6 << " seconds" << endl << endl;;
-        msh.spl = spl;
-        msh.param = param;
-        
-        // mesh refinement
-        start = chrono::high_resolution_clock::now();
-        msh.Delaunay_refine(h);
-        stop = chrono::high_resolution_clock::now();
-        duration = chrono::duration_cast<chrono::microseconds>(stop - start);
-        cout << "finished delaunay refinement in " << duration.count()/1e6 << " seconds" << endl;
-        cout << "minimum angle: " << check_minangle(&msh) << endl << endl;
-
-        // mesh smoothing
-        start = chrono::high_resolution_clock::now();
-        msh.mesh_smoothing_2d(msh.find_boundary_nodes(), 50, 0.0);;
-        stop = chrono::high_resolution_clock::now();
-        duration = chrono::duration_cast<chrono::microseconds>(stop - start);
-        cout << "finished mesh smoothing in " << duration.count()/1e6 << " seconds" << endl;
-        cout << "minimum angle: " << check_minangle(&msh) << endl << endl;
+    Mesh msh = Ellipse_mesh(100);
 
         // FEM goes here
         cout << "Performing FEM with P1 elements" << endl;
@@ -529,4 +483,73 @@ void test4(){
 
         WrtieVtk_tri(msh, "test4.vtk");
         cout << "finished writing to file" << endl;
+}
+
+void test5(){
+    cout << "performing test 5: edge coloring a mesh" << endl << endl;
+    Mesh msh = Ellipse_mesh(50);
+
+    // edge coloring
+    msh.Graph_init();
+    stack* head = msh.Graph_Color_greedy();
+    check_graph(msh);
+    WrtieVtk_Graph(msh, "test5.vtk");
+
+}
+
+
+Mesh Ellipse_mesh(int npoints){
+    int npoints_spline = 250;
+
+    // generating points on ellipse for the spline
+    vector<vector<double>> Spline_points = Ellipse(npoints_spline);
+
+    // creating spline
+    auto start = chrono::high_resolution_clock::now();
+    Spline spl = spline_init(Spline_points,3);
+    auto stop = chrono::high_resolution_clock::now();
+    auto duration = chrono::duration_cast<chrono::microseconds>(stop - start);
+    cout << "created Spline in " << duration.count()/1e6 << " seconds" << endl << endl;
+
+    // interpolating points using spline
+    vector<vector<double>> points = Zeros<double>(npoints,2);
+    vector<double> param(npoints);
+    for (int i = 0; i<npoints; i++){
+        param[i] = double(i)/double(npoints);
+        points[i] = spline_var(&spl, param[i]);
+    } 
+
+    // calculating average edge length
+    double h = 0.0;
+    for (int i = 0; i<npoints; i++){
+        h = h + norm(points[(i+1)%npoints]-points[i]);
+    }
+    h = 1*(sqrt(3)/3)*(h/(double(npoints)-1));
+
+    // initial Mesh
+    start = chrono::high_resolution_clock::now();
+    Mesh msh = GeoMesh_Delaunay_Mesh(points);
+    stop = chrono::high_resolution_clock::now();
+    duration = chrono::duration_cast<chrono::microseconds>(stop - start);
+    cout << "finished initial Mesh in " << duration.count()/1e6 << " seconds" << endl << endl;;
+    msh.spl = spl;
+    msh.param = param;
+        
+    // mesh refinement
+    start = chrono::high_resolution_clock::now();
+    msh.Delaunay_refine(h);
+    stop = chrono::high_resolution_clock::now();
+    duration = chrono::duration_cast<chrono::microseconds>(stop - start);
+    cout << "finished delaunay refinement in " << duration.count()/1e6 << " seconds" << endl;
+    cout << "minimum angle: " << check_minangle(&msh) << endl << endl;
+
+    // mesh smoothing
+    start = chrono::high_resolution_clock::now();
+    msh.mesh_smoothing_2d(msh.find_boundary_nodes(), 50, 0.0);;
+    stop = chrono::high_resolution_clock::now();
+    duration = chrono::duration_cast<chrono::microseconds>(stop - start);
+    cout << "finished mesh smoothing in " << duration.count()/1e6 << " seconds" << endl;
+    cout << "minimum angle: " << check_minangle(&msh) << endl << endl;
+
+    return msh;
 }

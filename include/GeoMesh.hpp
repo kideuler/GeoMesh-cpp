@@ -6,7 +6,13 @@
 #include <iostream>
 #include <functional>
 #include <chrono>
+#include <queue>
 using namespace std;
+
+struct Edge {
+    int hfids[2];
+    int color;
+};
 
 struct Spline {
     int nv;
@@ -22,22 +28,35 @@ struct Stencil {
     vector<int> hvids;
 };
 
+struct stack
+{
+    int hfid;
+    struct stack *next;
+};
+
 struct Mesh {
-    vector<vector<double>> coords;
-    vector<vector<double>> normals;
-    vector<double> param;
-    vector<vector<int>> elems;
-    vector<vector<int>> sibhfs;
-    int nelems;
-    int degree;
-    vector<vector<int>> facets;
-    vector<bool> delete_elem;
-    vector<int> badtris;
-    vector<int> vedge;
-    vector<bool> bwork;
-    vector<bool> on_boundary;
-    Spline spl;
-    Stencil stl;
+    vector<vector<double>> coords; // coordinate array
+    vector<vector<double>> normals; // unit normal coordinate array
+    vector<double> param; // spline parameters [0,1]
+    vector<vector<int>> elems; // element connectivity table
+    vector<vector<int>> sibhfs; // ahf connectivity table
+    int nelems; // number of elements
+    int degree; // degree of mesh
+    vector<bool> delete_elem; // element deletion tag
+    vector<bool> on_boundary; // boundary elements 
+
+    vector<vector<int>> facets; // facet buffer array for bowyer watson (deprecated)
+    vector<int> badtris; // buffer array of triangles whose circumcircle contains a point (deprecated)
+    vector<int> vedge; // buffer array which contains hfids (deprecated)
+    vector<bool> bwork; // buffer array of booleans (deprecated)
+
+    Spline spl; // Spline for geometry
+
+    Stencil stl; // compressed CRS format for one-ring stencil
+
+    vector<vector<int>> GraphNodes; // nodes of the graph of mesh whose entries are edges
+    vector<Edge> GraphEdges; // Edges of the graph of mesh
+    int ncolors; // total number of colors for the graph (default number of edge facets per element)
 
     // major member functions
     void compute_AHF();
@@ -49,6 +68,9 @@ struct Mesh {
     void Delaunay_refine(double r_ref);
     void mesh_smoothing_2d(vector<bool> no_move, int niters = 5, double mu = 0.0, vector<double> refareas={});
     double mesh_smoothing_tri_2d_iter(vector<bool> no_move,  double mu, vector<double> refareas, double Energy_old);
+    void Graph_init();
+    queue<int> Graph_Color_greedy(bool userand = false);
+
 
     // minor utility functions
     void delete_tris();
@@ -60,6 +82,7 @@ struct Mesh {
     void flip_edge(int eid, int lid);
     bool inside_diametral(int hfid, vector<double> &ps);
     bool check_jacobians_node(int vid, vector<double> dir = {0.0,0.0});
+    int find_nonconflict_color(int edge_id);
 };
 
 // Finite element functions
@@ -91,9 +114,11 @@ bool inside_tri(const vector<vector<double>> &xs, const vector<double> &ps);
 vector<vector<int>> find_boundary(Mesh* msh, bool findloop);
 void WrtieVtk_tri(const Mesh &msh, string filname);
 void WrtieVtk_tri(const Mesh &msh, const vector<double> &data, string filename);
+void WrtieVtk_Graph(const Mesh &msh, string filename);
 Mesh ReadObj_tri(string filename);
 bool check_sibhfs(Mesh* DT);
 bool check_jacobians(Mesh* DT);
+bool check_graph(const Mesh &msh);
 void save_array(const vector<vector<double>> &A, string filename);
 vector<vector<double>> read_array(string filename);
 
@@ -104,10 +129,6 @@ int hfid2eid(int hfid);
 int hfid2lid(int hfid);
 int elids2hfid(int eid, int lid);
 
-struct stack
-{
-    int hfid;
-    struct stack *next;
-};
+
 void push_stack(stack** head, int hfid);
 void pop_stack(stack** head);

@@ -1,7 +1,7 @@
 CC = g++
 CFLAGS = -I -Isrc  -Iinclude -Iextern/eigen
 DEPS = src/*.cpp
-DEPS_O = Meshgen2d.o Meshutils.o GeoSpline.o MeshSmooth.o MeshSurface.o FEM.o
+DEPS_O = Meshgen2d.o Meshutils.o GeoSpline.o MeshSmooth.o MeshSurface.o FEM.o FacetColor.o
 OBJ = test
 OBJDIR = bin
 
@@ -40,3 +40,9 @@ debug:
 	$(CC) $(CFLAGS)  -g test.cpp $(DEPS_O) -o $(OBJ)
 	./$(OBJ) 4
 	sudo cp test4.vtk /mnt/c/Users/Jacob/Documents/test4.vtk
+# test 5
+.PHONY: 5
+5:
+	$(CC) $(CFLAGS)  -g test.cpp $(DEPS_O) -o $(OBJ)
+	./$(OBJ) 5
+	sudo cp test5.vtk /mnt/c/Users/Jacob/Documents/test5.vtk
