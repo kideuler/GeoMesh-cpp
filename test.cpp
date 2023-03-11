@@ -491,7 +491,7 @@ void test5(){
 
     // edge coloring
     msh.Graph_init();
-    stack* head = msh.Graph_Color_greedy();
+    queue<int> Q = msh.Graph_Color_greedy();
     check_graph(msh);
     WrtieVtk_Graph(msh, "test5.vtk");
 

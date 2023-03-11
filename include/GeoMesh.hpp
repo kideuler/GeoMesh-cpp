@@ -70,6 +70,7 @@ struct Mesh {
     double mesh_smoothing_tri_2d_iter(vector<bool> no_move,  double mu, vector<double> refareas, double Energy_old);
     void Graph_init();
     queue<int> Graph_Color_greedy(bool userand = false);
+    void resolve_conflicting_edges(queue<int> Q);
 
 
     // minor utility functions
@@ -83,6 +84,7 @@ struct Mesh {
     bool inside_diametral(int hfid, vector<double> &ps);
     bool check_jacobians_node(int vid, vector<double> dir = {0.0,0.0});
     int find_nonconflict_color(int edge_id);
+    bool check_swap(int edge_id);
 };
 
 // Finite element functions
@@ -104,7 +106,6 @@ function<double(vector<double>)> create_curvature_hfunction(Spline* spl, int npo
 Mesh GeoMesh_Delaunay_Mesh(vector<vector<double>> &xs, vector<double> &params);
 Mesh GeoMesh_Delaunay_Mesh(const vector<vector<int>> &segs, vector<vector<double>> &xs);
 Mesh GeoMesh_Delaunay_Mesh(vector<vector<double>> &xs);
-void Bowyer_watson2d(Mesh* DT, int vid, int tri_s,bool refine);
 double check_minangle(Mesh* DT);
 double area_tri(const vector<vector<double>> &xs);
 vector<vector<int>> obtain_trifacets(int degree);

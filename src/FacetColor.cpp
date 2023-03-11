@@ -60,12 +60,50 @@ queue<int> Mesh::Graph_Color_greedy(bool userand){
 
 
 // necessary functions
-void Mesh::resolve_conflicting_edges(queue<int> Q) // overall function
-bool Mesh::check_swap(int edge_id); // checks whether swap is valid (easy)
-bool Mesh::resolve(int edge_id); // tries to resolve edge id false if no immidiate resolution (hard)
-bool Mesh::edge_swap(int edge_id); // swaps edge while not revisiting any other previously visited edge. false if out of options (medium)
-void Mesh::create_conflict(int edge_id, queue<int> Q); // creates new conflict outlined in paper (easy i think)
+void Mesh::resolve_conflicting_edges(queue<int> Q){
 
+} // overall function
+
+bool Mesh::check_swap(int edge_id){
+    
+    int hfid1, hfid2, eid1, eid2, lid1, lid2, c;
+    
+    bool* used = new bool[ncolors]; 
+    for (int i = 0; i<ncolors; i++){used[i] = false;}
+
+    hfid1 = GraphEdges[edge_id].hfids[0];
+    hfid2 = GraphEdges[edge_id].hfids[1];
+    eid1 = hfid2eid(hfid1)-1;
+    lid1 = hfid2lid(hfid1)-1;
+    eid2 = hfid2eid(hfid2)-1;
+    lid2 = hfid2lid(hfid2)-1;
+
+    int nfacets = sibhfs[eid1].size();
+    for (int i = 1; i<nfacets; i++){
+        c = GraphEdges[GraphNodes[eid1][(lid1+i)%nfacets]].color;
+        if (c > 0){
+            if (!used[c-1]) {used[c-1] = true;} else{ return false;}
+        }
+    }
+
+    for (int i = 0; i<ncolors; i++){used[i] = false;}
+    if (eid2 >= 0){
+        int nfacets = sibhfs[eid2].size();
+        for (int i = 1; i<nfacets; i++){
+            c = GraphEdges[GraphNodes[eid2][(lid2+i)%nfacets]].color;
+            if (c > 0){
+                if (!used[c-1]) {used[c-1] = true;} else{ delete used; return false;}
+            }
+        }
+    }
+    delete used; return true;
+}
+
+//bool Mesh::resolve(int edge_id); // tries to resolve edge id false if no immidiate resolution (hard)
+
+//bool Mesh::edge_swap(int edge_id); // swaps edge while not revisiting any other previously visited edge. false if out of options (medium)
+
+//void Mesh::create_conflict(int edge_id, queue<int> Q); // creates new conflict outlined in paper (easy i think)
 
 
 int Mesh::find_nonconflict_color(int edge_id){
