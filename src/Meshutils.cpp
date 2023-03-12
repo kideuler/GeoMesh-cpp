@@ -416,10 +416,11 @@ vector<vector<double>> read_array(string filename){
     string line;
     int m,n;
     ifstream in(filename);
-    getline(in, line);
+    vector<vector<double>> A;
+    while (getline(in, line)){
     istringstream ss( line );                           
     ss >> m;
-    vector<vector<double>> A(m);
+    A.resize(m);
     for (int i = 0; i<m; i++){
         getline(in, line);
         istringstream ss( line );
@@ -429,5 +430,41 @@ vector<vector<double>> read_array(string filename){
             ss >> A[i][j];
         }
     }
+    }
     return A;
+}
+
+void load_lake(vector<vector<double>> &coords, vector<vector<int>> &segments){
+    string line;
+    int m,n;
+    ifstream in("data/lake.dat");;
+    getline(in, line);
+    istringstream ss( line );                           
+    ss >> m;
+    coords.resize(m);
+    for (int i = 0; i<m; i++){
+        getline(in, line);
+        istringstream ss( line );
+        coords[i].resize(2);
+        for (int j = 0; j<2; j++){
+            ss >> coords[i][j];
+        }
+    }
+
+    getline(in, line);
+    istringstream pp( line );                           
+    pp >> m;
+    segments.resize(m);
+    for (int i = 0; i<m; i++){
+        getline(in, line);
+        istringstream pp( line );
+        segments[i].resize(2);
+        for (int j = 0; j<2; j++){
+            pp >> segments[i][j];
+        }
+    }
+
+    // find loops in segments. for all loops that arent the largest reverse order. that should fix use find_boundary in utilss
+
+    return;
 }

@@ -120,6 +120,7 @@ void test2(); // mesh generation and fem on curvature adaptive flower hole
 void test3(); // mesh generation and fem on circle with mona-lisa embedded 
 void test4(); // surface reconstruction of stanford bunny
 void test5(); // testing branch for edge coloring and quad mesh gen
+void test6(); // testing branch for constraine deltri
 
 /**
  * STILL TO DO: create tests print timings and angles
@@ -140,6 +141,8 @@ int main(int argc, char *argv[]){
         test4();
     } else if (arg == 5){
         test5();
+    } else if (arg == 6){
+        test6();
     }
 }
 
@@ -495,6 +498,48 @@ void test5(){
     check_graph(msh);
     WrtieVtk_Graph(msh, "test5.vtk");
 
+}
+
+void test6(){
+    vector<vector<double>> points = {{0,7},{-5,5},{5,5},{-2,3},{3,1},{-4,-1},{1,-2},{-6,-4},{5,-4}};
+
+    vector<vector<int>> segments = {{4,6}};
+    Mesh msh = GeoMesh_Delaunay_Mesh(segments,points);
+    cout << "finished test 1" << endl;
+
+    segments = {{4,5}};
+    msh = GeoMesh_Delaunay_Mesh(segments,points); 
+    cout << "finished test 2" << endl;
+
+    segments = {{6,0}};
+    msh = GeoMesh_Delaunay_Mesh(segments,points);
+    cout << "finished test 3" << endl;
+
+    segments = {{2,7}};
+    msh = GeoMesh_Delaunay_Mesh(segments,points);  
+    cout << "finished test 4" << endl;
+
+    segments = {{1,8}};
+    msh = GeoMesh_Delaunay_Mesh(segments,points);
+    cout << "finished test 5" << endl;
+    
+    segments = {{4,5},{2,3}};
+    msh = GeoMesh_Delaunay_Mesh(segments,points);
+    cout << "finished test 6" << endl;
+
+    segments = {{1,2},{2,5}};
+    msh = GeoMesh_Delaunay_Mesh(segments,points); 
+    cout << "finished test 7" << endl;
+
+    segments = {{7,4},{4,8}};
+    msh = GeoMesh_Delaunay_Mesh(segments,points); 
+    cout << "finished test 8" << endl;
+
+    load_lake(points, segments);
+    printMat(points);
+    printMat(segments);
+    msh = GeoMesh_Delaunay_Mesh(segments,points,true); 
+    WrtieVtk_tri(msh, "test6.vtk");
 }
 
 

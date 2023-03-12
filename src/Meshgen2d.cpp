@@ -192,7 +192,7 @@ void Mesh::decompose_to_linear(){
  * 
  * @param maxne max number of elements that can be around each point
  */
-void Mesh::compute_Onering(int maxne){
+void Mesh::compute_Onering(int maxne, bool compress){
     int nv = coords.size();
     int* hvids = new int[maxne*nv];
     vector<int> nv2e;
@@ -203,26 +203,44 @@ void Mesh::compute_Onering(int maxne){
     for (int i = 0; i<nelems; i++){
         for (int j = 0; j<3; j++){
             v = elems[i][j];
-            hvids[maxne*v+nv2e[v]] = elids2hfid(i+1,j+1);
             nv2e[v]++;
+            if (nv2e[v] >= maxne){
+                delete hvids;
+                cout << "Mesh::compute_Onering buffers too small, enlarging ring" << endl;
+                compute_Onering(2*maxne, compress);
+                return;
+            }
+            hvids[maxne*v+nv2e[v]-1] = elids2hfid(i+1,j+1);
             size++;
         }
     }
 
     // putting in structure
-    stl.index.assign(nv+1,0);
-    stl.hvids.assign(size,0);
-    int sz = 0;
-    for (int vid = 0; vid<nv; vid++){
-        for (int i = 0; i<nv2e[vid]; i++){
-            stl.hvids[sz] = hvids[maxne*vid+i];
-            sz++;
+    if (compress){
+        stl.index.assign(nv+1,0);
+        stl.hvids.assign(size,0);
+        int sz = 0;
+        for (int vid = 0; vid<nv; vid++){
+            for (int i = 0; i<nv2e[vid]; i++){
+                stl.hvids[sz] = hvids[maxne*vid+i];
+                sz++;
+            }
+            stl.index[vid+1] = sz;
         }
-        stl.index[vid+1] = sz;
+    } else {
+        stl.index.assign(nv+1,0);
+        stl.hvids.assign(maxne*nv,-1);
+        int sz = 0;
+        for (int vid = 0; vid<nv; vid++){
+            for (int i = 0; i<nv2e[vid]; i++){
+                stl.hvids[maxne*vid+i] = hvids[maxne*vid+i];
+                sz++;
+            }
+            stl.index[vid+1] = stl.index[vid]+maxne;
+        }
     }
     delete hvids;
 
-    //printvec(stl.hvids);
     return;
 }
 
@@ -572,113 +590,104 @@ vector<int> Mesh::boundary_nodes(){
  * @param xs Point data (nv -by- 2)
  * @return Constrained delaunay Mesh
  */
-Mesh GeoMesh_Delaunay_Mesh(const vector<vector<int>> &segs, vector<vector<double>> &xs){
+Mesh GeoMesh_Delaunay_Mesh(const vector<vector<int>> &segs, vector<vector<double>> &xs, bool delete_exterior){
 
     // segs define boundary segments for the mesh
     Mesh DT = GeoMesh_Delaunay_Mesh(xs);
-    DT.bwork.resize(DT.nelems);
+    int maxne = 10;
+    DT.compute_Onering(maxne,false);
     DT.facets.resize(DT.nelems);
-    int nv = xs.size();
-    int nsegs = segs.size();
-    vector<vector<int>> onering(nv);
-    vector<int> numonering(nv);
+    DT.bwork.assign(DT.nelems, false);
 
-    int vid,i,j,k,hfid;
-    for (i = 0; i<DT.nelems; i++){
-        for (j = 0; j<3; j++){
-            vid = DT.elems[i][j];
-            onering[vid].push_back(elids2hfid(i+1,j+1));
-        }
-    }
-
-    int oppeid,eid,lnid,vid2,lid,opplid,nf;
+    int v1, v2, hvid, kk, eid, nid, nf, hfid, lid, oppeid, opplid;
     nf = 0;
-    bool exitf,exiti;
-    for (i = 0; i<nsegs; i++){
-        stack* head = NULL;
-        vid = segs[i][0];
-        vid2 = segs[i][1];
-        j=0;
-        exitf = false;
-        while(j<onering[vid].size() && !exitf){
-            eid = hfid2eid(onering[vid][j])-1;
-            lnid = hfid2lid(onering[vid][j])-1;
-            if (DT.elems[eid][(lnid+1)%3] == vid2){
-                hfid = DT.sibhfs[eid][(lnid)%3];
-                if (hfid != 0){
-                    DT.facets[nf][0] = eid;
-                    DT.facets[nf][1] = lnid;
-                    DT.bwork[eid] = true;
-                    nf++;
+    bool inray, connected, convex;
+    for (int S = 0; S<segs.size(); S++){
+        v1 = segs[S][0];
+        v2 = segs[S][1];
+        
+        
+        connected = false;
+        while (!connected){ // segment not done
+            inray = false;
+            convex = false;
+            hvid = 1;
+            kk = 0;
+            while (!inray && !connected && kk < maxne){ // finding segment connection or line that obstructs segment
+                hvid = DT.stl.hvids[DT.stl.index[v1]+kk];
+                if (hvid <= 0){
+                    break;
                 }
-                exitf = true;
-            } else if (Line_cross(DT.coords[DT.elems[eid][(lnid+1)%3]], DT.coords[DT.elems[eid][(lnid+2)%3]], DT.coords[vid], DT.coords[vid2])){
-                cout << "found ray with triangle with node " << eid << " " << lnid << endl; 
-                cout << "changing Mesh to satisfy constrained edge " << vid<< "," << vid2 << endl;
-                // Do constrained Del alg here
-                hfid = DT.sibhfs[eid][(lnid+1)%3];
-                exiti = false;
-                while (!exiti){
-                    push_stack(&head, hfid);
-                    eid = hfid2eid(hfid)-1;
-                    lid = hfid2lid(hfid)-1;
-                    cout << eid << " " << lid << endl;
-                    k = 0;
-                    cout << DT.elems[eid][0] << " " << DT.elems[eid][1] << " " << DT.elems[eid][2] << endl;
-                    cout << vid2 << endl;
-                    while (k<3 && !exiti){
-                        if (DT.elems[eid][k] == vid2){
-                            exiti = true;
-                        }
-                        k++;
-                    }
 
-                    if (Line_cross(DT.coords[DT.elems[eid][(lid+1)%3]], DT.coords[DT.elems[eid][(lid+2)%3]], DT.coords[vid], DT.coords[vid2])){
-                        hfid = DT.sibhfs[eid][(lid+1)%3];
-                    } else if (Line_cross(DT.coords[DT.elems[eid][(lid+2)%3]], DT.coords[DT.elems[eid][(lid)%3]], DT.coords[vid], DT.coords[vid2])){
-                        hfid = DT.sibhfs[eid][(lid+2)%3];
-                    } else {
-                        cout << "no line cross found, error in geometry" << endl;
+                eid = hfid2eid(hvid)-1;
+                nid = hfid2lid(hvid)-1;
+                if (DT.elems[eid][(nid+1)%3] == v2){
+                    connected = true;
+                    hfid = DT.sibhfs[eid][nid];
+                    if (hfid > 0){
+                        DT.facets[nf][0] = eid;
+                        DT.facets[nf][1] = nid;
+                        DT.bwork[eid] = true;
+                        nf++;
                     }
+                    break;
                 }
-                exitf = true;
+                if (DT.elems[eid][(nid+2)%3] == v2){
+                    connected = true;
+                    hfid = DT.sibhfs[eid][(nid+2)%3];
+                    if (hfid > 0){
+                        DT.facets[nf][0] = hfid2eid(hfid)-1;
+                        DT.facets[nf][1] = hfid2lid(hfid)-1;
+                        DT.bwork[hfid2eid(hfid)-1] = true;
+                        nf++;
+                    }
+                    break;
+                }
+                
+                if (Line_cross(DT.coords[DT.elems[eid][(nid+1)%3]], DT.coords[DT.elems[eid][(nid+2)%3]], DT.coords[v1], DT.coords[v2])){
+                    inray = true;
+                    break;
+                }
+                kk++;
             }
-            j++;
-        }
-        if (!exitf){
-            cout << "no constrained edge found for edge: " << segs[i][0] << "," << segs[i][1] << endl;
+
+            if (inray) { // flip segment and correct onering if convex quad
+                lid = (nid+1)%3;
+                hfid = DT.sibhfs[eid][lid];
+                while (!DT.convex_quad(eid,lid)){ // keep finding segments till one is convex
+                    oppeid = hfid2eid(hfid)-1;
+                    opplid = hfid2lid(hfid)-1;
+                    if (Line_cross(DT.coords[DT.elems[oppeid][(opplid+1)%3]], DT.coords[DT.elems[oppeid][(opplid+2)%3]], DT.coords[v1], DT.coords[v2])){
+                        eid = oppeid;
+                        lid = (opplid+1)%3;
+                    } else if (Line_cross(DT.coords[DT.elems[oppeid][(opplid+2)%3]], DT.coords[DT.elems[oppeid][opplid]], DT.coords[v1], DT.coords[v2])){
+                        eid = oppeid;
+                        lid = (opplid+2)%3;
+                    }
+                }
+                DT.flip_edge(eid, lid);
+                // get working inefficient (highly inefficient for big mesh, need code that simply replaces nodes that are changed not all nodes)
+                DT.compute_Onering(maxne,false);
+            }
+
         }
 
-        // Flipping triangles
-        while (head != NULL){
-            hfid = head->hfid;
-            pop_stack(&head);
-            eid = hfid2eid(hfid)-1;
-            lid = hfid2lid(hfid)-1;
-            oppeid = hfid2eid(DT.sibhfs[eid][lid])-1;
-            opplid = hfid2lid(DT.sibhfs[eid][lid])-1;
-            cout << "flipping edge " << eid << " " << lid << " and " << oppeid << " " << opplid << endl;
-            cout << "eid " << DT.elems[eid][0] << " " << DT.elems[eid][1] << " " << DT.elems[eid][2] << endl;
-            cout << "oppeid " << DT.elems[oppeid][0] << " " << DT.elems[oppeid][1] << " " << DT.elems[oppeid][2] << endl;
-            DT.flip_edge(eid,lid);
-            cout << "after swapping " << endl;
-            cout << "eid " << DT.elems[eid][0] << " " << DT.elems[eid][1] << " " << DT.elems[eid][2] << endl;
-            cout << "oppeid " << DT.elems[oppeid][0] << " " << DT.elems[oppeid][1] << " " << DT.elems[oppeid][2] << endl;
-        }
 
     }
+
 
     // delete elements on opposite side of boundary;
-    for (i=0;i<nf;i++){
-        eid = DT.facets[i][0];
-        lid = DT.facets[i][1];
-        if (DT.sibhfs[eid][lid] != 0){
-            Recursive_tri_delete(&DT, DT.sibhfs[eid][lid]);
+    if (delete_exterior){
+        for (int i=0;i<nf;i++){
+            eid = DT.facets[i][0];
+            lid = DT.facets[i][1];
+            hfid = DT.sibhfs[eid][lid];
+            //Recursive_tri_delete(&DT, hfid);
+            DT.delete_elem[hfid2eid(hfid)-1] = true;
         }
     }
-
     DT.delete_tris();
-
+    DT.stl.index.resize(0);
     return DT;
 }
 void Recursive_tri_delete(Mesh* DT, int hfid){
@@ -1056,6 +1065,43 @@ void Mesh::flip_edge(int eid, int lid){
     on_boundary[oppeid] = sib21 || sib22;
 
     return;
+}
+
+/**
+ * @brief find if triangles attatcched to eid,lid form convex quad
+ * 
+ * @param eid element id
+ * @param lid edge id
+ * @return true 
+ * @return false 
+ */
+bool Mesh::convex_quad(int eid, int lid){
+    int hfid = sibhfs[eid][lid];
+    int oppeid = hfid2eid(hfid)-1;
+    int opplid = hfid2lid(hfid)-1;
+
+    int v1 = elems[eid][(lid+2)%3];
+    int v2 = elems[eid][lid];
+    int v4 = elems[eid][(lid+1)%3];
+    int v3 = elems[oppeid][(opplid+2)%3];
+
+    double sides[4][2] = {{coords[v2][0]-coords[v1][0],coords[v2][1]-coords[v1][1]},
+    {coords[v3][0]-coords[v2][0],coords[v3][1]-coords[v2][1]},
+    {coords[v4][0]-coords[v3][0],coords[v4][1]-coords[v3][1]},
+    {coords[v1][0]-coords[v4][0],coords[v1][1]-coords[v4][1]}};
+
+    double cp;
+    bool sign = false;
+    for (int i = 0; i<4; i++){
+        cp = sides[i][0]*sides[(i+1)%4][1] - sides[i][1]*sides[(i+1)%4][0];
+        if (i==0){
+            sign = (cp>0);
+        } else if (sign != (cp>0)){
+            return false;
+        }
+    }
+
+    return true;
 }
 
 /**

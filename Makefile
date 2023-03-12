@@ -46,3 +46,9 @@ debug:
 	$(CC) $(CFLAGS)  -g test.cpp $(DEPS_O) -o $(OBJ)
 	./$(OBJ) 5
 	sudo cp test5.vtk /mnt/c/Users/Jacob/Documents/test5.vtk
+# test 6
+.PHONY: 6
+6:
+	$(CC) $(CFLAGS)  -g test.cpp $(DEPS_O) -o $(OBJ)
+	./$(OBJ) 6
+	sudo cp test6.vtk /mnt/c/Users/Jacob/Documents/test6.vtk

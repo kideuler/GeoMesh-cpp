@@ -62,7 +62,7 @@ struct Mesh {
     void compute_AHF();
     void make_quadratic();
     void decompose_to_linear();
-    void compute_Onering(int maxne = 10);
+    void compute_Onering(int maxne = 10, bool compress = true);
     void compute_normals();
     void Delaunay_refine(function<double(vector<double>)> r_ref);
     void Delaunay_refine(double r_ref);
@@ -81,6 +81,7 @@ struct Mesh {
     void Flip_Insertion(int* vid, int starting_tri);
     void Flip_Insertion_segment(int vid, int hfid);
     void flip_edge(int eid, int lid);
+    bool convex_quad(int eid, int lid);
     bool inside_diametral(int hfid, vector<double> &ps);
     bool check_jacobians_node(int vid, vector<double> dir = {0.0,0.0});
     int find_nonconflict_color(int edge_id);
@@ -104,7 +105,7 @@ function<double(vector<double>)> create_curvature_hfunction(Spline* spl, int npo
 
 // delaunay Mesh functions 2d
 Mesh GeoMesh_Delaunay_Mesh(vector<vector<double>> &xs, vector<double> &params);
-Mesh GeoMesh_Delaunay_Mesh(const vector<vector<int>> &segs, vector<vector<double>> &xs);
+Mesh GeoMesh_Delaunay_Mesh(const vector<vector<int>> &segs, vector<vector<double>> &xs, bool delete_exterior = false);
 Mesh GeoMesh_Delaunay_Mesh(vector<vector<double>> &xs);
 double check_minangle(Mesh* DT);
 double area_tri(const vector<vector<double>> &xs);
@@ -122,6 +123,7 @@ bool check_jacobians(Mesh* DT);
 bool check_graph(const Mesh &msh);
 void save_array(const vector<vector<double>> &A, string filename);
 vector<vector<double>> read_array(string filename);
+void load_lake(vector<vector<double>> &coords, vector<vector<int>> &segments);
 
 // small functions to be used in multiple files
 vector<double> min_array(const vector<vector<double>> &xs);
