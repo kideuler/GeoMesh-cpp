@@ -501,6 +501,7 @@ void test5(){
 }
 
 void test6(){
+    cout << "performing test 6: using constrained delaunay to mesh lake superior" << endl << endl;
     vector<vector<double>> points;
     vector<vector<int>> segments;
     load_lake(points, segments);
