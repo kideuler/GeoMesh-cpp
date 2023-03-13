@@ -682,8 +682,7 @@ Mesh GeoMesh_Delaunay_Mesh(const vector<vector<int>> &segs, vector<vector<double
             eid = DT.facets[i][0];
             lid = DT.facets[i][1];
             hfid = DT.sibhfs[eid][lid];
-            //Recursive_tri_delete(&DT, hfid);
-            DT.delete_elem[hfid2eid(hfid)-1] = true;
+            Recursive_tri_delete(&DT, hfid);
         }
     }
     DT.delete_tris();

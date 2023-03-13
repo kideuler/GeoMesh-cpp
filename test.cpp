@@ -501,45 +501,82 @@ void test5(){
 }
 
 void test6(){
-    vector<vector<double>> points = {{0,7},{-5,5},{5,5},{-2,3},{3,1},{-4,-1},{1,-2},{-6,-4},{5,-4}};
-
-    vector<vector<int>> segments = {{4,6}};
-    Mesh msh = GeoMesh_Delaunay_Mesh(segments,points);
-    cout << "finished test 1" << endl;
-
-    segments = {{4,5}};
-    msh = GeoMesh_Delaunay_Mesh(segments,points); 
-    cout << "finished test 2" << endl;
-
-    segments = {{6,0}};
-    msh = GeoMesh_Delaunay_Mesh(segments,points);
-    cout << "finished test 3" << endl;
-
-    segments = {{2,7}};
-    msh = GeoMesh_Delaunay_Mesh(segments,points);  
-    cout << "finished test 4" << endl;
-
-    segments = {{1,8}};
-    msh = GeoMesh_Delaunay_Mesh(segments,points);
-    cout << "finished test 5" << endl;
-    
-    segments = {{4,5},{2,3}};
-    msh = GeoMesh_Delaunay_Mesh(segments,points);
-    cout << "finished test 6" << endl;
-
-    segments = {{1,2},{2,5}};
-    msh = GeoMesh_Delaunay_Mesh(segments,points); 
-    cout << "finished test 7" << endl;
-
-    segments = {{7,4},{4,8}};
-    msh = GeoMesh_Delaunay_Mesh(segments,points); 
-    cout << "finished test 8" << endl;
-
+    vector<vector<double>> points;
+    vector<vector<int>> segments;
     load_lake(points, segments);
-    printMat(points);
-    printMat(segments);
-    msh = GeoMesh_Delaunay_Mesh(segments,points,true); 
-    WrtieVtk_tri(msh, "test6.vtk");
+    double h = 0.0;
+    for (int i = 0; i<segments.size(); i++){
+        h = h + norm(points[segments[i][1]]-points[segments[i][0]]);
+    }
+    h = (sqrt(3)/3)*(h/(double(segments.size())-1));
+
+    auto start = chrono::high_resolution_clock::now();
+    Mesh msh = GeoMesh_Delaunay_Mesh(segments,points,true); 
+    auto stop = chrono::high_resolution_clock::now();
+    auto duration = chrono::duration_cast<chrono::microseconds>(stop - start);
+    cout << "created initial constrained mesh in " << duration.count()/1e6 << " seconds" << endl << endl;
+
+    // creating mesh refinement function
+    int nspace = 20;
+    for (int i = 0; i<segments.size(); i++){
+        for (int j = 0; j<nspace; j++){
+            points.push_back((points[segments[i][1]]-points[segments[i][0]])*(double(j+1)/double(nspace+2)) + points[segments[i][0]]);
+        }
+    }
+    function<double(vector<double>)> H = create_grad(points, h, 0.2, 0.5);
+
+    // mesh refinement
+    start = chrono::high_resolution_clock::now();
+    msh.Delaunay_refine(H);
+    stop = chrono::high_resolution_clock::now();
+    duration = chrono::duration_cast<chrono::microseconds>(stop - start);
+    cout << "finished delaunay refinement in " << duration.count()/1e6 << " seconds" << endl;
+    cout << "minimum angle: " << check_minangle(&msh) << endl << endl;
+
+    // mesh smoothing
+    start = chrono::high_resolution_clock::now();
+    msh.mesh_smoothing_2d(msh.find_boundary_nodes(), 50, 0.0);;
+    stop = chrono::high_resolution_clock::now();
+    duration = chrono::duration_cast<chrono::microseconds>(stop - start);
+    cout << "finished mesh smoothing in " << duration.count()/1e6 << " seconds" << endl;
+    cout << "minimum angle: " << check_minangle(&msh) << endl << endl;
+
+    // FEM goes here
+    cout << "Performing FEM with P1 elements" << endl;
+    double kappa = 2.0;
+    int nv = msh.coords.size();
+    vector<double> u = uexpr(msh.coords); // true solution
+    vector<double> frhs = ulap(msh.coords, kappa); // rhs expression
+    vector<int> bndnodes = msh.boundary_nodes(); // finding boundary nodes
+    int nbnd = bndnodes.size();
+    vector<double> dvals(nbnd); // dirichlet values
+    for (int n = 0; n<nbnd; n++) {dvals[n] = u[bndnodes[n]];}
+    vector<double> u_h = Poisson_2d(&msh, frhs, kappa, bndnodes, dvals);
+    vector<double> error(nv);
+    double maxE = 0.0;
+    for (int n = 0; n<nv; n++) {error[n] = abs(u[n]-u_h[n]); if(error[n]>maxE){maxE=error[n];}}
+    double P1_error = norm(error)/norm(u);
+    cout << "l2 relative error from Linear mesh: " << P1_error << endl;
+    cout << "l_inf absolute error from Linear mesh: " << maxE << endl << endl;
+
+    cout << "Performing FEM with P2 elements" << endl;
+    msh.make_quadratic();
+    nv = msh.coords.size();
+    u = uexpr(msh.coords); // true solution
+    frhs = ulap(msh.coords, kappa); // rhs expression
+    bndnodes = msh.boundary_nodes(); // finding boundary nodes
+    nbnd = bndnodes.size();
+    dvals.resize(nbnd);
+    for (int n = 0; n<nbnd; n++) {dvals[n] = u[bndnodes[n]];}
+    u_h = Poisson_2d(&msh, frhs, kappa, bndnodes, dvals);
+    error.resize(nv);
+    maxE = 0.0;
+    for (int n = 0; n<nv; n++) {error[n] = abs(u[n]-u_h[n]); if(error[n]>maxE){maxE=error[n];}}
+    double P2_error = norm(error)/norm(u);
+    cout << "l2 relative error from Quadratic mesh: " << P2_error << endl;
+    cout << "l_inf absolute error from Quadratic mesh: " << maxE << endl << endl;
+    
+    WrtieVtk_tri(msh, error, "test6.vtk");
 }
 
 

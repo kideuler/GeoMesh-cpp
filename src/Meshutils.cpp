@@ -464,7 +464,24 @@ void load_lake(vector<vector<double>> &coords, vector<vector<int>> &segments){
         }
     }
 
-    // find loops in segments. for all loops that arent the largest reverse order. that should fix use find_boundary in utilss
+
+    int j, v;
+    for (int i = 0; i<m; i++){
+        j = i+1;
+        v = segments[i][1];
+        while (j < m){
+            if (segments[j][0] == v){
+                swap(segments[i+1], segments[j]);
+                break;
+            }
+            j++;
+        }
+
+    }
+
+    for(int i = 225; i<m; i++){
+        swap(segments[i][0],segments[i][1]);
+    }
 
     return;
 }
