@@ -67,7 +67,9 @@ struct Mesh {
     void Delaunay_refine(function<double(vector<double>)> r_ref);
     void Delaunay_refine(double r_ref);
     void mesh_smoothing_2d(vector<bool> no_move, int niters = 5, double mu = 0.0, vector<double> refareas={});
+    void MIPS_minimize(vector<vector<double>> &params, int niters = 20);
     double mesh_smoothing_tri_2d_iter(vector<bool> no_move,  double mu, vector<double> refareas, double Energy_old);
+    double MIPS_iter(double Energy_old, vector<vector<double>> &params);
     void Graph_init();
     queue<int> Graph_Color_greedy(bool userand = false);
     void resolve_conflicting_edges(queue<int> Q);

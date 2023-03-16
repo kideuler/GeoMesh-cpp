@@ -422,69 +422,14 @@ void test4(){
         auto duration = chrono::duration_cast<chrono::microseconds>(stop - start);
         cout << "finished parametric mapping of surface in " << duration.count()/1e6 << " seconds" << endl << endl;
 
-        vector<double> hnode = Average_nodal_edgelength(&Surface, Params);
-        double hmax = max(hnode);
-        hnode = hnode/hmax;
-
-        int npoints_spline = 250;
-        vector<vector<double>> Spline_points = Circle(npoints_spline);
-
-        // creating spline degree 3
         start = chrono::high_resolution_clock::now();
-        Spline spl = spline_init(Spline_points,3);
+        Surface.MIPS_minimize(Params,10);
         stop = chrono::high_resolution_clock::now();
         duration = chrono::duration_cast<chrono::microseconds>(stop - start);
-        cout << "created Spline in " << duration.count()/1e6 << " seconds" << endl << endl;
+        cout << "finished MIPS minimization in " << duration.count()/1e6 << " seconds" << endl << endl;
 
-        // interpolating points using spline
-        int npoints = 30;
-        vector<vector<double>> points = Zeros<double>(npoints,2);
-        vector<vector<int>> segments = Zeros<int>(npoints,2);
-        vector<double> param(npoints);
-        for (int i = 0; i<npoints; i++){
-            param[i] = double(i)/double(npoints);
-            points[i] = spline_var(&spl, param[i]);
-            segments[i][0] = i;
-            segments[i][1] = (i+1)%npoints;
-        }
-
-        // calculating average edge length
-        double h = 0.0;
-        for (int i = 0; i<npoints; i++){
-            h = h + norm(points[(i+1)%npoints]-points[i]);
-        }
-        h = 1*(sqrt(3)/3)*(h/(double(npoints)-1));
-
-        // initial Mesh
-        start = chrono::high_resolution_clock::now();
-        Mesh msh = GeoMesh_Delaunay_Mesh(points);
-        stop = chrono::high_resolution_clock::now();
-        duration = chrono::duration_cast<chrono::microseconds>(stop - start);
-        cout << "finished initial Mesh in " << duration.count()/1e6 << " seconds" << endl << endl;
-        msh.spl = spl;
-        msh.param = param;
-        
-        // mesh refinement
-        start = chrono::high_resolution_clock::now();
-        function<double(vector<double>)> H = create_grad(Params, h, hnode, 0.0005);
-        msh.Delaunay_refine(H);
-        stop = chrono::high_resolution_clock::now();
-        duration = chrono::duration_cast<chrono::microseconds>(stop - start);
-        cout << "finished delaunay refinement in " << duration.count()/1e6 << " seconds" << endl;
-        cout << "minimum angle: " << check_minangle(&msh) << endl << endl;
-
-        // mesh smoothing
-        start = chrono::high_resolution_clock::now();
-        msh.mesh_smoothing_2d(msh.find_boundary_nodes(), 50, 0.0);;
-        stop = chrono::high_resolution_clock::now();
-        duration = chrono::duration_cast<chrono::microseconds>(stop - start);
-        cout << "finished mesh smoothing in " << duration.count()/1e6 << " seconds" << endl;
-        cout << "minimum angle: " << check_minangle(&msh) << endl << endl;
-
-        // mapping parameter mesh back to surface
-        Parametric2Surface(&Surface, Params, &msh);
-
-        WrtieVtk_tri(msh, "test4.vtk");
+        Surface.coords = Params;
+        WrtieVtk_tri(Surface, "test4.vtk");
         cout << "finished writing to file" << endl;
 }
 
