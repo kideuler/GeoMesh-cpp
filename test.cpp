@@ -121,6 +121,7 @@ void test3(); // mesh generation and fem on circle with mona-lisa embedded
 void test4(); // surface reconstruction of stanford bunny
 void test5(); // testing branch for edge coloring and quad mesh gen
 void test6(); // testing branch for constraine deltri
+void test7(); // testing kdtrees
 
 /**
  * STILL TO DO: create tests print timings and angles
@@ -143,6 +144,8 @@ int main(int argc, char *argv[]){
         test5();
     } else if (arg == 6){
         test6();
+    } else if (arg == 7){
+        test7();
     }
 }
 
@@ -525,6 +528,11 @@ void test6(){
     WrtieVtk_tri(msh, error, "test6.vtk");
 }
 
+void test7(){
+    cout << "performing test 7: putting points in a kd-tree" << endl << endl;
+    vector<vector<double>> coords = randMatrix<double>(100,2);
+    kdNode* root = create_kdTree(coords);
+}
 
 Mesh Ellipse_mesh(int npoints){
     int npoints_spline = 250;

@@ -9,6 +9,17 @@
 #include <queue>
 using namespace std;
 
+struct kdNode {
+    int depth;
+    int vid = -1;
+    struct kdNode *left;
+    struct kdNode *right;
+
+    void insert_node(int nid, int node_depth, const vector<vector<double>> &coords, int ndims);
+    int find_nearest_node(vector<double> xs);
+    void printnode();
+};
+
 struct Edge {
     int hfids[2];
     int color;
@@ -126,6 +137,9 @@ bool check_graph(const Mesh &msh);
 void save_array(const vector<vector<double>> &A, string filename);
 vector<vector<double>> read_array(string filename);
 void load_lake(vector<vector<double>> &coords, vector<vector<int>> &segments);
+
+// kdtree functions
+kdNode* create_kdTree(const vector<vector<double>> &coords);
 
 // small functions to be used in multiple files
 vector<double> min_array(const vector<vector<double>> &xs);
