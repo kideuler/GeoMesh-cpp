@@ -6,8 +6,7 @@ OBJ = test
 OBJDIR = bin
 
 make:
-	$(CC) $(CFLAGS) -c -O3 $(DEPS)
-
+	mpic++ $(CFLAGS) -c -g $(DEPS)
 .PHONY: clean
 clean:
 	rm -rf *.o *.vtk
@@ -15,6 +14,10 @@ clean:
 .PHONY: debug
 debug:
 	$(CC) $(CFLAGS) -c -g $(DEPS)
+
+.PHONY: multi
+multi:
+	mpic++ $(CFLAGS) -c -g $(DEPS)
 
 # test 1
 .PHONY: 1
@@ -57,3 +60,7 @@ debug:
 7:
 	$(CC) $(CFLAGS)  -g test.cpp $(DEPS_O) -o $(OBJ)
 	./$(OBJ) 7
+.PHONY: 8
+8:
+	mpic++ $(CFLAGS)  -g test.cpp $(DEPS_O) -o $(OBJ)
+	mpirun -np 4 ./$(OBJ) 8

@@ -2,6 +2,7 @@
 #include <iostream>
 #include <random>
 #include <cassert>
+#include <mpi.h>
 using namespace std;
 
 #ifndef LINALG_H
@@ -106,6 +107,7 @@ vector<vector<T>> operator*(const vector<vector<T>> &A, const vector<vector<T>> 
     }
     return prod;
 }
+
 
 // matrix vector multiplication
 template <typename T>
@@ -355,7 +357,8 @@ void operator-=(vector<T>  &u, const vector<T>  &v){
 // matrix and vector initializers
 template <typename T>
 vector<T> randvec(int n, T lower=0, T upper=1){
-    default_random_engine re(time(0));
+    std::random_device rd;
+    default_random_engine re(rd());
     vector<T> rand(n);
     uniform_real_distribution<double> unif(lower, upper);
     for(int i = 0; i < n; i++){
@@ -373,7 +376,8 @@ vector<vector<T>> Zeros(int m, int n){
 
 template <typename T>
 vector<vector<T>> randMatrix(int m, int n, T lower=0, T upper=1){
-    default_random_engine re(time(0));
+    std::random_device rd;
+    default_random_engine re(rd());
     vector<vector<T>> rand = Zeros<T>(m,n);
     uniform_real_distribution<double> unif(lower, upper);
     for(int i = 0; i < m; i++){

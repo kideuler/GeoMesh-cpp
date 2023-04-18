@@ -7,6 +7,7 @@
 #include <functional>
 #include <chrono>
 #include <queue>
+#include <mpi.h>
 using namespace std;
 
 struct kdNode {
@@ -16,7 +17,8 @@ struct kdNode {
     struct kdNode *right;
 
     void insert_node(int nid, int node_depth, const vector<vector<double>> &coords, int ndims);
-    int find_nearest_node(vector<double> xs);
+    int find_nearest_node(const vector<double> &xs, const vector<vector<double>> &coords);
+    void find_nearest_node_kernel(const vector<double> &xs, const vector<vector<double>> &coords, int ndims, int* curr_node, double* best_distance);
     void printnode();
 };
 
@@ -151,3 +153,9 @@ int elids2hfid(int eid, int lid);
 
 void push_stack(stack** head, int hfid);
 void pop_stack(stack** head);
+
+// sorting algorithms for parallel tests
+int quicksort_partition(int *x, int lo, int hi);
+void quicksort_kernel(int *x, int lo, int hi);
+void quicksort(int *x, int sz);
+void mergesort(int *x, int sz1, int *y, int sz2, int* xy);
